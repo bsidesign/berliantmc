@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PenLine, ImageIcon, Check, Maximize2 } from "lucide-react";
+import { PenLine, ImageIcon, Check, Eye, Maximize2 } from "lucide-react";
 import Header from "@/components/Header";
 import { randomTopics } from "@/lib/table-topics-bank";
 
@@ -12,16 +12,16 @@ export default function TableTopicsPage() {
   const [theme, setTheme] = useState("");
   const [count, setCount] = useState(5);
   const [topics, setTopics] = useState<string[]>([]);
-  const [used, setUsed] = useState<Set<number>>(new Set());
+  const [opened, setOpened] = useState<Set<number>>(new Set());
   const [reveal, setReveal] = useState<number | null>(null);
 
   function handleGenerate() {
     setTopics(randomTopics(count, theme));
-    setUsed(new Set());
+    setOpened(new Set());
   }
 
-  function markUsed(i: number) {
-    setUsed((prev) => new Set(prev).add(i));
+  function openTopic(i: number) {
+    setOpened((prev) => new Set(prev).add(i));
   }
 
   return (
@@ -108,28 +108,44 @@ export default function TableTopicsPage() {
 
         {topics.length > 0 && (
           <div className="flex w-full flex-col gap-3">
-            {topics.map((t, i) => (
-              <div
-                key={i}
-                className={`flex items-center justify-between gap-4 rounded-lg border p-5 ${
-                  used.has(i) ? "border-brand-dark-4 opacity-50" : "border-brand-blue"
-                }`}
-              >
-                <p className="text-[16px] leading-[1.4]">{t}</p>
-                <div className="flex shrink-0 items-center gap-2">
-                  {used.has(i) && <Check className="text-[#14c801]" size={20} />}
-                  <button
-                    onClick={() => {
-                      markUsed(i);
-                      setReveal(i);
-                    }}
-                    className="flex items-center gap-2 rounded-lg brand-gradient px-4 py-2.5 text-[14px] font-semibold text-white"
-                  >
-                    <Maximize2 size={16} /> Present
-                  </button>
+            {topics.map((t, i) => {
+              const isOpen = opened.has(i);
+              return (
+                <div
+                  key={i}
+                  className={`flex items-center justify-between gap-4 rounded-lg border p-5 ${
+                    isOpen ? "border-brand-dark-4" : "border-brand-blue"
+                  }`}
+                >
+                  {isOpen ? (
+                    <>
+                      <p className="text-[16px] leading-[1.4]">{t}</p>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Check className="text-[#14c801]" size={20} />
+                        <button
+                          onClick={() => setReveal(i)}
+                          className="flex items-center gap-2 rounded-lg brand-gradient px-4 py-2.5 text-[14px] font-semibold text-white"
+                        >
+                          <Maximize2 size={16} /> Present
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[16px] font-semibold text-brand-dark-2">
+                        Topic {i + 1}
+                      </p>
+                      <button
+                        onClick={() => openTopic(i)}
+                        className="flex shrink-0 items-center gap-2 rounded-lg border border-brand-blue px-4 py-2.5 text-[14px] font-semibold text-brand-blue"
+                      >
+                        <Eye size={16} /> Open
+                      </button>
+                    </>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

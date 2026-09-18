@@ -115,7 +115,8 @@ export default function TimerPage() {
   return (
     <>
       <Header section="Timer" />
-      <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col items-center gap-8 px-6 py-16">
+      <main className="flex flex-1 flex-col items-center">
+        <div className="mx-auto flex w-full max-w-[1200px] flex-col items-center gap-8 px-6 pt-16 pb-16">
         <div className="flex max-w-[730px] flex-col gap-1 text-center">
           <h1 className="text-[32px] font-semibold leading-tight sm:text-[42px]">Timer</h1>
           <p className="text-[18px] leading-[1.4]">
@@ -166,8 +167,9 @@ export default function TimerPage() {
             </button>
           </div>
         </div>
+        </div>
 
-        <section className="w-full rounded-lg py-8 brand-gradient">
+        <section className="flex w-full flex-1 flex-col py-8 brand-gradient">
           <h2 className="mb-6 text-center text-[32px] font-semibold text-white sm:text-[42px]">
             Timer Summary
           </h2>

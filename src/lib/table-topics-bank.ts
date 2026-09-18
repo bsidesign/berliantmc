@@ -1,6 +1,35 @@
-// Built-in bank of impromptu-speaking prompts. No backend needed — a random
-// subset is drawn client-side each time "Generate" is pressed. If a theme is
-// typed in, prompts that loosely match it are preferred first.
+// Built-in bank of impromptu-speaking prompts. No backend or AI needed —
+// everything runs client-side.
+//
+// When the Topics Master types a theme (e.g. "childhood crush"), we don't
+// have an AI to write a brand-new question about it — instead we drop the
+// theme into a set of question templates ("Tell us about a memorable
+// moment involving {theme}.") so every generated topic is actually about
+// what was typed. With no theme, we fall back to the generic hand-written
+// bank below.
+const THEME_TEMPLATES: string[] = [
+  "Tell us about a memorable moment involving {theme}.",
+  "What's the funniest experience you've had with {theme}?",
+  "If you could change one thing about {theme}, what would it be?",
+  "Describe how {theme} has shaped who you are today.",
+  "What's the best lesson you've learned from {theme}?",
+  "Share a story about {theme} that still makes you smile.",
+  "What advice would you give someone experiencing {theme} for the first time?",
+  "How do you think {theme} will look ten years from now?",
+  "What's a common misconception people have about {theme}?",
+  "Describe {theme} in three words, and explain why.",
+  "What's the most surprising thing you've learned about {theme}?",
+  "If {theme} were a movie, what genre would it be, and why?",
+  "Talk about a time {theme} completely changed your perspective.",
+  "What's one thing you wish more people understood about {theme}?",
+  "How has your view of {theme} changed over the years?",
+  "Share your most embarrassing story related to {theme}.",
+  "What's a piece of advice about {theme} you'd give your younger self?",
+  "Describe the first time you experienced {theme}.",
+  "If you had to give a one-minute talk introducing {theme} to a stranger, what would you say?",
+  "What role does {theme} play in your everyday life?",
+];
+
 export const TABLE_TOPICS_BANK: string[] = [
   "What is one habit you'd like to break, and why haven't you yet?",
   "If you could have dinner with anyone, living or dead, who would it be and why?",
@@ -34,24 +63,23 @@ export const TABLE_TOPICS_BANK: string[] = [
   "What's a hobby you'd like to pick up someday?",
 ];
 
-export function randomTopics(count: number, seed?: string) {
-  const pool = [...TABLE_TOPICS_BANK];
-  const query = seed?.trim().toLowerCase();
-
-  if (query) {
-    pool.sort((a, b) => {
-      const aMatch = a.toLowerCase().includes(query) ? 0 : 1;
-      const bMatch = b.toLowerCase().includes(query) ? 0 : 1;
-      return aMatch - bMatch;
-    });
-  }
-
-  // Shuffle within (roughly) preserving preference for matches, then take N.
-  const head = query ? pool.filter((t) => t.toLowerCase().includes(query)) : [];
-  const rest = query ? pool.filter((t) => !t.toLowerCase().includes(query)) : pool;
-  for (let i = rest.length - 1; i > 0; i--) {
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [rest[i], rest[j]] = [rest[j], rest[i]];
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
-  return [...head, ...rest].slice(0, count);
+  return copy;
+}
+
+export function randomTopics(count: number, theme?: string) {
+  const trimmed = theme?.trim();
+
+  if (trimmed) {
+    return shuffle(THEME_TEMPLATES)
+      .slice(0, count)
+      .map((template) => template.replace(/\{theme\}/g, trimmed));
+  }
+
+  return shuffle(TABLE_TOPICS_BANK).slice(0, count);
 }
