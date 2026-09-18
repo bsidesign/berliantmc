@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { UserPlus, Trophy, Copy, Check } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Trophy, Copy, Check, X, Award, Plus } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import Header from "@/components/Header";
 import {
@@ -15,20 +15,71 @@ import {
   type BallotVote,
 } from "@/lib/supabase";
 
+type Stage = "setup" | "qr" | "results";
+type NameLists = Record<Category, string[]>;
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatDate(iso: string) {
+  if (!iso) return "";
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2 text-left">
+      <label className="text-[16px] font-semibold text-brand-dark-1">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+const inputClass =
+  "h-[50px] w-full rounded-lg border border-black/25 px-4 text-[16px] outline-none focus:border-brand-blue";
+
 export default function BallotAdminPage() {
+  const [stage, setStage] = useState<Stage>("setup");
   const [session, setSession] = useState<BallotSession | null>(null);
   const [speakers, setSpeakers] = useState<BallotSpeaker[]>([]);
   const [votes, setVotes] = useState<BallotVote[]>([]);
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState<Category | "">("");
+
+  const [clubName, setClubName] = useState("");
+  const [room, setRoom] = useState("");
+  const [eventDate, setEventDate] = useState(todayISO());
+  const [names, setNames] = useState<NameLists>({
+    "Prepared Speech": [],
+    "Evaluation Speech": [],
+    "Table Topic": [],
+  });
+  const [draftName, setDraftName] = useState<Record<Category, string>>({
+    "Prepared Speech": "",
+    "Evaluation Speech": "",
+    "Table Topic": "",
+  });
   const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
   const [copied, setCopied] = useState(false);
+  const [revealed, setRevealed] = useState<Record<Category, boolean>>({
+    "Prepared Speech": false,
+    "Evaluation Speech": false,
+    "Table Topic": false,
+  });
+  const [certificate, setCertificate] = useState<Category | null>(null);
+
   const voteUrl =
     session && typeof window !== "undefined"
       ? `${window.location.origin}/ballot/vote/${session.code}`
       : "";
 
-  // Live vote tally: subscribe once we have a session.
+  // Votes are tallied quietly in the background so winners can be revealed
+  // on demand — nothing here is rendered until a Reveal button is clicked.
   useEffect(() => {
     if (!session) return;
     supabase
@@ -51,42 +102,84 @@ export default function BallotAdminPage() {
     };
   }, [session]);
 
-  async function createSession() {
+  function addName(category: Category) {
+    const value = draftName[category].trim();
+    if (!value) return;
+    setNames((prev) => ({ ...prev, [category]: [...prev[category], value] }));
+    setDraftName((prev) => ({ ...prev, [category]: "" }));
+    setFormError(null);
+  }
+
+  function removeName(category: Category, index: number) {
+    setNames((prev) => ({
+      ...prev,
+      [category]: prev[category].filter((_, i) => i !== index),
+    }));
+  }
+
+  async function handleGenerate() {
+    if (!clubName.trim() || !room.trim() || !eventDate) {
+      setFormError("Please fill in the club name, room, and date.");
+      return;
+    }
+    const emptyCategory = CATEGORIES.find((c) => names[c].length === 0);
+    if (emptyCategory) {
+      setFormError(`Please add at least one name for ${emptyCategory}.`);
+      return;
+    }
+
     setCreating(true);
+    setFormError(null);
     const code = randomCode();
     const { data, error } = await supabase
       .from("ballot_sessions")
-      .insert({ code })
+      .insert({ code, club_name: clubName.trim(), room: room.trim(), event_date: eventDate })
       .select()
       .single();
-    setCreating(false);
-    if (error) {
-      alert(`Could not create session: ${error.message}`);
-      return;
-    }
-    setSession(data as BallotSession);
-  }
 
-  async function addSpeaker() {
-    if (!session || !name.trim() || !category) return;
-    const { data, error } = await supabase
-      .from("ballot_speakers")
-      .insert({ session_id: session.id, name: name.trim(), category })
-      .select()
-      .single();
     if (error) {
-      alert(`Could not add speaker: ${error.message}`);
+      setCreating(false);
+      setFormError(`Could not create session: ${error.message}`);
       return;
     }
-    setSpeakers((prev) => [...prev, data as BallotSpeaker]);
-    setName("");
-    setCategory("");
+
+    const newSession = data as BallotSession;
+    const rows = CATEGORIES.flatMap((category) =>
+      names[category].map((name) => ({ session_id: newSession.id, name, category }))
+    );
+    const { data: speakerRows, error: speakerError } = await supabase
+      .from("ballot_speakers")
+      .insert(rows)
+      .select();
+
+    setCreating(false);
+    if (speakerError) {
+      setFormError(`Could not add speakers: ${speakerError.message}`);
+      return;
+    }
+
+    setSession(newSession);
+    setSpeakers((speakerRows as BallotSpeaker[]) ?? []);
+    setStage("qr");
   }
 
   function copyLink() {
     navigator.clipboard.writeText(voteUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  function winnerFor(category: Category) {
+    const list = speakers.filter((s) => s.category === category);
+    if (list.length === 0) return { label: "No speakers added", names: [] as string[] };
+    const tally = list.map((s) => ({
+      name: s.name,
+      count: votes.filter((v) => v.speaker_id === s.id).length,
+    }));
+    const top = Math.max(...tally.map((t) => t.count));
+    const winners = tally.filter((t) => t.count === top).map((t) => t.name);
+    if (top === 0) return { label: "No votes were cast", names: winners };
+    return { label: winners.join(" & "), names: winners };
   }
 
   if (!isSupabaseConfigured) {
@@ -104,152 +197,228 @@ export default function BallotAdminPage() {
     );
   }
 
-  return (
-    <>
-      <Header />
-      <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col items-center gap-10 px-6 py-16">
-        {!session ? (
-          <div className="flex max-w-[500px] flex-col items-center gap-4 text-center">
+  if (stage === "setup") {
+    return (
+      <>
+        <Header />
+        <main className="mx-auto flex w-full max-w-[1000px] flex-1 flex-col items-center gap-10 px-6 py-16">
+          <div className="flex max-w-[620px] flex-col items-center gap-1 text-center">
             <h1 className="text-[32px] font-semibold leading-tight sm:text-[42px]">
               Ballot Counter
             </h1>
             <p className="text-[18px] leading-[1.4]">
-              Create a session for today&rsquo;s meeting, add the eligible speakers, then
-              share the join code so members can vote from their own phones.
+              Set up today&rsquo;s meeting and list the speakers eligible to vote in
+              each category, then generate the voting QR code.
             </p>
-            <button
-              onClick={createSession}
-              disabled={creating}
-              className="rounded-lg brand-gradient px-6 py-3.5 text-[16px] font-semibold text-white disabled:opacity-50"
-            >
-              {creating ? "Creating..." : "Create Meeting Session"}
-            </button>
           </div>
-        ) : (
-          <div className="grid w-full max-w-[1080px] gap-12 md:grid-cols-2">
-            <div className="flex flex-col gap-6">
-              <div>
-                <h1 className="text-[32px] font-semibold leading-tight sm:text-[42px]">
-                  Ballot Counter
-                </h1>
-                <p className="text-[18px] leading-[1.4]">
-                  Enter the speakers eligible to vote for each session.
-                </p>
-              </div>
 
-              <div className="flex flex-col items-center gap-3 rounded-lg border border-brand-blue p-6 text-center">
-                <p className="text-[14px] uppercase tracking-wide text-brand-dark-3">
-                  Members join with this code
-                </p>
-                <p className="text-[42px] font-semibold tracking-widest text-brand-blue">
-                  {session.code}
-                </p>
-                <QRCodeSVG value={voteUrl} size={140} />
-                <button
-                  onClick={copyLink}
-                  className="flex items-center gap-2 text-[14px] font-semibold text-brand-dark-2"
-                >
-                  {copied ? <Check size={16} /> : <Copy size={16} />}
-                  {copied ? "Copied!" : "Copy voting link"}
-                </button>
-              </div>
+          <div className="grid w-full gap-4 sm:grid-cols-3">
+            <Field label="Toastmasters Club Name">
+              <input
+                value={clubName}
+                onChange={(e) => {
+                  setClubName(e.target.value);
+                  setFormError(null);
+                }}
+                placeholder="Example: Berlian Toastmasters"
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Room / Location">
+              <input
+                value={room}
+                onChange={(e) => {
+                  setRoom(e.target.value);
+                  setFormError(null);
+                }}
+                placeholder="Example: Mitsubishi Building 4th Floor"
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Date">
+              <input
+                type="date"
+                value={eventDate}
+                onChange={(e) => {
+                  setEventDate(e.target.value);
+                  setFormError(null);
+                }}
+                className={inputClass}
+              />
+            </Field>
+          </div>
 
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[21px] font-semibold">Member&rsquo;s Name</label>
+          <div className="grid w-full gap-6 sm:grid-cols-3">
+            {CATEGORIES.map((category) => (
+              <div
+                key={category}
+                className="flex flex-col gap-3 rounded-lg border border-brand-blue p-5"
+              >
+                <p className="text-[18px] font-semibold text-brand-dark-1">{category}</p>
+                <div className="flex gap-2">
                   <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    value={draftName[category]}
+                    onChange={(e) =>
+                      setDraftName((prev) => ({ ...prev, [category]: e.target.value }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addName(category);
+                      }
+                    }}
                     placeholder="Example: Lord Doni ..."
-                    className="h-[50px] rounded-lg border border-black/25 px-4 text-[18px] outline-none focus:border-brand-blue"
+                    className="h-[44px] flex-1 rounded-lg border border-black/25 px-3 text-[15px] outline-none focus:border-brand-blue"
                   />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[21px] font-semibold">Role</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as Category)}
-                    className="h-[50px] rounded-lg border border-black/25 px-4 text-[18px] text-brand-dark-1/70 outline-none focus:border-brand-blue"
+                  <button
+                    onClick={() => addName(category)}
+                    aria-label={`Add name to ${category}`}
+                    className="flex size-[44px] shrink-0 items-center justify-center rounded-lg brand-gradient text-white"
                   >
-                    <option value="">Choose Role</option>
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                    <Plus size={18} />
+                  </button>
                 </div>
-                <button
-                  onClick={addSpeaker}
-                  className="flex h-[50px] items-center justify-center gap-2 rounded-lg brand-gradient text-[13px] font-semibold text-white"
-                >
-                  <UserPlus size={18} /> Add Speaker
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-8">
-              <div>
-                <h2 className="mb-3 text-[28px] font-semibold">Speakers</h2>
-                {speakers.length === 0 ? (
-                  <p className="text-brand-dark-3">No data to display.</p>
+                {names[category].length === 0 ? (
+                  <p className="text-[14px] text-brand-dark-3">No names added yet.</p>
                 ) : (
-                  <ul className="flex flex-col gap-2">
-                    {speakers.map((s) => (
+                  <ul className="flex flex-col gap-1.5">
+                    {names[category].map((name, i) => (
                       <li
-                        key={s.id}
-                        className="flex items-center justify-between rounded-lg border border-brand-dark-4 px-4 py-3"
+                        key={`${name}-${i}`}
+                        className="flex items-center justify-between rounded-lg bg-brand-blue/5 px-3 py-2 text-[14px]"
                       >
-                        <span className="font-semibold">{s.name}</span>
-                        <span className="text-brand-dark-3">{s.category}</span>
+                        <span>{name}</span>
+                        <button
+                          onClick={() => removeName(category, i)}
+                          aria-label={`Remove ${name}`}
+                          className="text-brand-dark-3 hover:text-brand-dark-1"
+                        >
+                          <X size={14} />
+                        </button>
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
-
-              <div>
-                <h2 className="mb-3 text-[28px] font-semibold">Live Results</h2>
-                {CATEGORIES.filter((c) => speakers.some((s) => s.category === c)).map(
-                  (c) => {
-                    const list = speakers
-                      .filter((s) => s.category === c)
-                      .map((s) => ({
-                        ...s,
-                        count: votes.filter((v) => v.speaker_id === s.id).length,
-                      }))
-                      .sort((a, b) => b.count - a.count);
-                    const topCount = list[0]?.count ?? 0;
-                    return (
-                      <div key={c} className="mb-4">
-                        <p className="mb-1 text-[16px] font-semibold text-brand-dark-2">
-                          {c}
-                        </p>
-                        <div className="flex flex-col gap-1.5">
-                          {list.map((s) => (
-                            <div
-                              key={s.id}
-                              className="flex items-center justify-between rounded-lg border border-brand-dark-4 px-3 py-2 text-[14px]"
-                            >
-                              <span className="flex items-center gap-1.5">
-                                {s.count > 0 && s.count === topCount && (
-                                  <Trophy size={14} className="text-brand-blue" />
-                                )}
-                                {s.name}
-                              </span>
-                              <span>{s.count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  }
-                )}
-              </div>
-            </div>
+            ))}
           </div>
-        )}
+
+          {formError && <p className="text-[15px] font-medium text-[#f94444]">{formError}</p>}
+
+          <button
+            onClick={handleGenerate}
+            disabled={creating}
+            className="rounded-lg brand-gradient px-8 py-4 text-[16px] font-semibold text-white disabled:opacity-50"
+          >
+            {creating ? "Generating..." : "Generate QR Code"}
+          </button>
+        </main>
+      </>
+    );
+  }
+
+  if (stage === "qr") {
+    return (
+      <>
+        <Header />
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 brand-gradient p-8 text-center text-white">
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-[16px] font-semibold uppercase tracking-wide opacity-80">
+              {clubName}
+            </p>
+            <p className="text-[14px] opacity-70">
+              {room} &middot; {formatDate(eventDate)}
+            </p>
+          </div>
+          <h1 className="text-[32px] font-semibold sm:text-[42px]">Scan to Vote</h1>
+          <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-8 text-brand-dark-1">
+            <p className="text-[14px] uppercase tracking-wide text-brand-dark-3">
+              Members join with this code
+            </p>
+            <p className="text-[42px] font-semibold tracking-widest text-brand-blue">
+              {session?.code}
+            </p>
+            <QRCodeSVG value={voteUrl} size={180} />
+            <button
+              onClick={copyLink}
+              className="flex items-center gap-2 text-[14px] font-semibold text-brand-dark-2"
+            >
+              {copied ? <Check size={16} /> : <Copy size={16} />}
+              {copied ? "Copied!" : "Copy voting link"}
+            </button>
+          </div>
+          <button
+            onClick={() => setStage("results")}
+            className="flex items-center gap-2 rounded-lg bg-white px-8 py-4 text-[16px] font-semibold text-brand-blue"
+          >
+            <Trophy size={20} />
+            Reveal Winners
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Header />
+      <main className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col items-center gap-10 px-6 py-16">
+        <div className="flex flex-col items-center gap-1 text-center">
+          <h1 className="text-[32px] font-semibold leading-tight sm:text-[42px]">
+            Reveal the Winners
+          </h1>
+          <p className="text-[18px] leading-[1.4] text-brand-dark-3">
+            {clubName} &middot; {room} &middot; {formatDate(eventDate)}
+          </p>
+        </div>
+
+        <div className="grid w-full gap-8 sm:grid-cols-3">
+          {CATEGORIES.map((category) => (
+            <div
+              key={category}
+              className="flex flex-col items-center gap-5 rounded-2xl border border-brand-blue p-8 text-center"
+            >
+              <Trophy className="text-brand-blue" size={40} strokeWidth={1.5} />
+              <p className="text-[21px] font-semibold text-brand-dark-1">{category}</p>
+              <button
+                onClick={() => setCertificate(category)}
+                className="flex items-center gap-2 rounded-lg brand-gradient px-6 py-3.5 text-[15px] font-semibold text-white"
+              >
+                {revealed[category] ? (
+                  <>
+                    <Award size={16} /> View Certificate
+                  </>
+                ) : (
+                  "Reveal Winner"
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
       </main>
+
+      {certificate && (
+        <div
+          className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center gap-6 p-10 text-center text-white brand-gradient"
+          onClick={() => {
+            setRevealed((prev) => ({ ...prev, [certificate]: true }));
+            setCertificate(null);
+          }}
+        >
+          <Award size={56} />
+          <p className="text-[16px] font-semibold uppercase tracking-[0.2em] opacity-80">
+            Certificate of Achievement
+          </p>
+          <p className="text-[24px] font-medium opacity-90">{certificate}</p>
+          <p className="max-w-[700px] text-[40px] font-semibold leading-tight sm:text-[56px]">
+            {winnerFor(certificate).label}
+          </p>
+          <p className="text-[16px] opacity-80">
+            {clubName} &middot; {room} &middot; {formatDate(eventDate)}
+          </p>
+          <span className="mt-4 text-white/70">Tap anywhere to close</span>
+        </div>
+      )}
     </>
   );
 }

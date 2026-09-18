@@ -28,6 +28,9 @@ export type BallotSession = {
   id: string;
   code: string;
   is_open: boolean;
+  club_name: string | null;
+  room: string | null;
+  event_date: string | null;
   created_at: string;
 };
 
