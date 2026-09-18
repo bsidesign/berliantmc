@@ -4,7 +4,7 @@
   /* Stand-in for the Figma spec's "Clash Grotesk" (not freely embeddable) —
      swap this for the real font later by dropping files in public/fonts
      and updating this variable + the @font-face block below. */
-  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Onest", ui-sans-serif, system-ui, sans-serif;
 
   /* Brand tokens pulled from the Berlian TMC Figma file */
   --color-brand-blue: #2182c3;
