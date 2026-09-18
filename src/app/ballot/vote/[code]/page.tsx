@@ -117,7 +117,7 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
 
   return (
     <>
-      <Header section="Ballot Counter" />
+      <Header />
       <main className="mx-auto flex w-full max-w-[643px] flex-1 flex-col items-center gap-8 px-6 py-16">
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-[32px] font-semibold sm:text-[42px]">Ballot Counter</h1>
