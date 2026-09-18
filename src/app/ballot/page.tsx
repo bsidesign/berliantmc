@@ -203,7 +203,7 @@ export default function BallotAdminPage() {
         <Header />
         <main className="mx-auto flex w-full max-w-[1000px] flex-1 flex-col items-center gap-10 px-6 py-16">
           <div className="flex max-w-[620px] flex-col items-center gap-1 text-center">
-            <h1 className="text-[32px] font-semibold leading-tight sm:text-[42px]">
+            <h1 className="text-[32px] font-extrabold leading-tight sm:text-[42px]">
               Ballot Counter
             </h1>
             <p className="text-[18px] leading-[1.4]">
@@ -332,7 +332,7 @@ export default function BallotAdminPage() {
               {room} &middot; {formatDate(eventDate)}
             </p>
           </div>
-          <h1 className="text-[32px] font-semibold sm:text-[42px]">Scan to Vote</h1>
+          <h1 className="text-[32px] font-extrabold sm:text-[42px]">Scan to Vote</h1>
           <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-8 text-brand-dark-1">
             <p className="text-[14px] uppercase tracking-wide text-brand-dark-3">
               Members join with this code
@@ -366,7 +366,7 @@ export default function BallotAdminPage() {
       <Header />
       <main className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col items-center gap-10 px-6 py-16">
         <div className="flex flex-col items-center gap-1 text-center">
-          <h1 className="text-[32px] font-semibold leading-tight sm:text-[42px]">
+          <h1 className="text-[32px] font-extrabold leading-tight sm:text-[42px]">
             Reveal the Winners
           </h1>
           <p className="text-[18px] leading-[1.4] text-brand-dark-3">

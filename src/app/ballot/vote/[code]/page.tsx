@@ -118,7 +118,7 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
       <Header />
       <main className="mx-auto flex w-full max-w-[643px] flex-1 flex-col items-center gap-10 px-6 py-16">
         <div className="flex flex-col items-center gap-1 text-center">
-          <h1 className="text-[32px] font-semibold sm:text-[42px]">Ballot Counter</h1>
+          <h1 className="text-[32px] font-extrabold sm:text-[42px]">Ballot Counter</h1>
           <p className="text-[18px]">Vote for the best speakers!</p>
         </div>
 
@@ -133,7 +133,7 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
               const votedFor = votedCategories[category];
               return (
                 <div key={category} className="flex w-full flex-col gap-3.5">
-                  <h2 className="text-[24px] font-semibold text-brand-dark-1">{category}</h2>
+                  <h2 className="text-[24px] font-extrabold text-brand-dark-1">{category}</h2>
                   {categorySpeakers.map((s) => {
                     const isVotedForThis = votedFor === s.id;
                     const alreadyVoted = Boolean(votedFor);

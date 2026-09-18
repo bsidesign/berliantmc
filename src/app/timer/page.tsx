@@ -118,7 +118,7 @@ export default function TimerPage() {
       <main className="flex flex-1 flex-col items-center">
         <div className="mx-auto flex w-full max-w-[1200px] flex-col items-center gap-8 px-6 pt-16 pb-16">
         <div className="flex max-w-[730px] flex-col gap-1 text-center">
-          <h1 className="text-[32px] font-semibold leading-tight sm:text-[42px]">Timer</h1>
+          <h1 className="text-[32px] font-extrabold leading-tight sm:text-[42px]">Timer</h1>
           <p className="text-[18px] leading-[1.4]">
             Timing is all about keeping the meeting on track. Set the speaking time, start
             the clock, and use visual signals to let speakers know when they&rsquo;re
@@ -170,7 +170,7 @@ export default function TimerPage() {
         </div>
 
         <section className="flex w-full flex-1 flex-col py-8 brand-gradient">
-          <h2 className="mb-6 text-center text-[32px] font-semibold text-white sm:text-[42px]">
+          <h2 className="mb-6 text-center text-[32px] font-extrabold text-white sm:text-[42px]">
             Timer Summary
           </h2>
           <div className="mx-auto w-[92%] overflow-x-auto rounded-lg border border-brand-dark-4">
@@ -251,7 +251,7 @@ export default function TimerPage() {
           {mode === "naming" && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 p-6">
               <div className="flex w-full max-w-[420px] flex-col gap-4 rounded-2xl bg-white p-8 text-brand-dark-1">
-                <h3 className="text-[24px] font-semibold">Who just spoke?</h3>
+                <h3 className="text-[24px] font-extrabold">Who Just Spoke?</h3>
                 <p className="text-[15px] text-brand-dark-3">
                   Time: {formatTime(finalElapsed)} &middot; {category.label}
                 </p>
