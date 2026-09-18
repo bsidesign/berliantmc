@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PenLine, ImageIcon, Check, Eye, Maximize2 } from "lucide-react";
+import { PenLine, ImageIcon, Check, ChevronDown, Eye, Maximize2, X } from "lucide-react";
 import Header from "@/components/Header";
 import { randomTopics } from "@/lib/table-topics-bank";
 
@@ -20,8 +20,16 @@ export default function TableTopicsPage() {
     setOpened(new Set());
   }
 
+  function handleClear() {
+    setTopics([]);
+    setOpened(new Set());
+    setReveal(null);
+  }
+
+  // One click both marks the topic opened and shows it fullscreen.
   function openTopic(i: number) {
     setOpened((prev) => new Set(prev).add(i));
+    setReveal(i);
   }
 
   return (
@@ -79,29 +87,49 @@ export default function TableTopicsPage() {
                 className="w-full rounded-lg border border-brand-dark-3 p-4 text-[18px] outline-none focus:border-brand-blue"
               />
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-[18px]">How many topics?</span>
-              <select
-                value={count}
-                onChange={(e) => setCount(Number(e.target.value))}
-                className="h-[50px] rounded-lg border border-black px-4 text-[16px] font-semibold text-brand-dark-2"
-              >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleGenerate}
-                className="rounded-lg px-6 py-3.5 text-[16px] font-semibold text-white"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(160deg, rgb(249,68,68) 6%, rgb(111,0,0) 128%)",
-                }}
-              >
-                Generate Table Topic&rsquo;s
-              </button>
+            <div className="flex w-full items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <span className="text-[18px]">How many topics?</span>
+                <div className="relative">
+                  <select
+                    value={count}
+                    onChange={(e) => setCount(Number(e.target.value))}
+                    className="h-[50px] appearance-none rounded-lg border border-black py-0 pl-4 pr-10 text-[16px] font-semibold text-brand-dark-2"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={18}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-brand-dark-2"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {topics.length > 0 && (
+                  <button
+                    onClick={handleClear}
+                    className="flex items-center gap-2 rounded-lg border border-black/25 px-6 py-3.5 text-[16px] font-semibold text-brand-dark-2"
+                  >
+                    <X size={18} />
+                    Clear
+                  </button>
+                )}
+                <button
+                  onClick={handleGenerate}
+                  className="rounded-lg px-6 py-3.5 text-[16px] font-semibold text-white"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(160deg, rgb(249,68,68) 6%, rgb(111,0,0) 128%)",
+                  }}
+                >
+                  Generate Table Topic&rsquo;s
+                </button>
+              </div>
             </div>
           </div>
         )}
