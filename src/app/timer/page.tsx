@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Play, Pause, RotateCcw, Trash2 } from "lucide-react";
+import { Play, Square, RotateCcw, Trash2, X } from "lucide-react";
 import Header from "@/components/Header";
-import { TIMER_CATEGORIES, formatTime } from "@/lib/timer-categories";
+import { TIMER_CATEGORIES, type TimerCategory, formatTime } from "@/lib/timer-categories";
 
 type SummaryRow = {
   id: string;
@@ -11,6 +11,33 @@ type SummaryRow = {
   category: string;
   time: string;
   note: string;
+};
+
+type Mode = "idle" | "running" | "naming";
+type Zone = "white" | "green" | "yellow" | "red" | "black";
+
+function zoneFor(elapsed: number, category: TimerCategory): Zone {
+  if (elapsed < category.green) return "white";
+  if (elapsed < category.yellow) return "green";
+  if (elapsed < category.red) return "yellow";
+  if (elapsed < category.black) return "red";
+  return "black";
+}
+
+const ZONE_STYLES: Record<Zone, string> = {
+  white: "bg-white text-brand-dark-1",
+  green: "bg-[#14c801] text-white",
+  yellow: "bg-[#f5c518] text-brand-dark-1",
+  red: "bg-[#f94444] text-white",
+  black: "bg-black text-white",
+};
+
+const ZONE_NOTES: Record<Zone, string> = {
+  white: "Under minimum time",
+  green: "On time",
+  yellow: "Wrap up",
+  red: "Over time",
+  black: "Not eligible to vote",
 };
 
 export default function TimerPage() {
@@ -21,19 +48,20 @@ export default function TimerPage() {
   );
 
   const [remaining, setRemaining] = useState(category.red);
-  const [running, setRunning] = useState(false);
+  const [mode, setMode] = useState<Mode>("idle");
+  const [finalElapsed, setFinalElapsed] = useState(0);
   const [name, setName] = useState("");
   const [rows, setRows] = useState<SummaryRow[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  function selectCategory(next: (typeof TIMER_CATEGORIES)[number]) {
+  function selectCategory(next: TimerCategory) {
     setCategoryId(next.id);
-    setRunning(false);
+    setMode("idle");
     setRemaining(next.red);
   }
 
   useEffect(() => {
-    if (running) {
+    if (mode === "running") {
       intervalRef.current = setInterval(() => {
         setRemaining((r) => r - 1);
       }, 1000);
@@ -43,40 +71,40 @@ export default function TimerPage() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [running]);
+  }, [mode]);
 
   const elapsed = category.red - remaining;
-  const zone =
-    elapsed < category.green
-      ? "neutral"
-      : elapsed < category.yellow
-        ? "green"
-        : elapsed < category.red
-          ? "yellow"
-          : "red";
-
-  const zoneStyles: Record<string, string> = {
-    neutral: "bg-white text-brand-dark-1",
-    green: "bg-[#14c801] text-white",
-    yellow: "bg-[#f5c518] text-brand-dark-1",
-    red: "bg-[#f94444] text-white",
-  };
-
+  const zone = zoneFor(elapsed, category);
   const progressPct = Math.min(100, Math.max(0, (elapsed / category.red) * 100));
 
+  function handleStart() {
+    setMode("running");
+  }
+
+  function handleStop() {
+    setFinalElapsed(elapsed);
+    setMode("naming");
+  }
+
   function handleReset() {
-    setRunning(false);
+    setMode("idle");
     setRemaining(category.red);
   }
 
-  function handleSave() {
+  function handleCancelFullscreen() {
+    setMode("idle");
+    setRemaining(category.red);
+  }
+
+  function handleAddSpeaker() {
+    const finalZone = zoneFor(finalElapsed, category);
     setRows((prev) => [
       {
         id: crypto.randomUUID(),
         name: name.trim() || "Unnamed speaker",
         category: category.label,
-        time: formatTime(elapsed),
-        note: zone === "red" ? "Over time" : zone === "yellow" ? "Wrap up" : "On time",
+        time: formatTime(finalElapsed),
+        note: ZONE_NOTES[finalZone],
       },
       ...prev,
     ]);
@@ -111,9 +139,7 @@ export default function TimerPage() {
           ))}
         </div>
 
-        <div
-          className={`flex w-full max-w-[758px] flex-col items-center gap-4 rounded-2xl py-10 transition-colors ${zoneStyles[zone]}`}
-        >
+        <div className="flex w-full max-w-[758px] flex-col items-center gap-4 rounded-2xl border border-brand-dark-4 bg-white py-10 text-brand-dark-1">
           <p className="text-[96px] font-semibold leading-none tabular-nums sm:text-[160px]">
             {formatTime(remaining)}
           </p>
@@ -125,11 +151,11 @@ export default function TimerPage() {
           </div>
           <div className="flex gap-4">
             <button
-              onClick={() => setRunning((r) => !r)}
+              onClick={handleStart}
               className="flex items-center gap-2 rounded-lg bg-[#14c801] px-6 py-3.5 text-[16px] font-semibold text-white"
             >
-              {running ? <Pause size={18} /> : <Play size={18} />}
-              {running ? "Pause" : "Start"}
+              <Play size={18} />
+              Start
             </button>
             <button
               onClick={handleReset}
@@ -139,24 +165,6 @@ export default function TimerPage() {
               Reset
             </button>
           </div>
-        </div>
-
-        <div className="flex w-full max-w-[643px] items-end gap-4">
-          <div className="flex flex-1 flex-col gap-1">
-            <label className="text-[21px] font-semibold">Toastmaster&rsquo;s Name</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Example: Lord Doni ..."
-              className="h-[50px] rounded-lg border border-black/25 px-4 text-[18px] outline-none focus:border-brand-blue"
-            />
-          </div>
-          <button
-            onClick={handleSave}
-            className="h-[50px] rounded-lg border border-black/25 px-6 text-[16px] font-semibold text-brand-dark-2"
-          >
-            Save
-          </button>
         </div>
 
         <section className="w-full rounded-lg py-8 brand-gradient">
@@ -206,6 +214,68 @@ export default function TimerPage() {
           </div>
         </section>
       </main>
+
+      {(mode === "running" || mode === "naming") && (
+        <div
+          className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 transition-colors ${ZONE_STYLES[zone]}`}
+        >
+          {mode === "running" && (
+            <button
+              onClick={handleCancelFullscreen}
+              aria-label="Exit without saving"
+              className="absolute right-6 top-6 rounded-full border border-current p-2 opacity-70 hover:opacity-100"
+            >
+              <X size={22} />
+            </button>
+          )}
+
+          <p className="text-[18px] font-semibold uppercase tracking-wide opacity-80">
+            {category.label}
+          </p>
+          <p className="text-[120px] font-semibold leading-none tabular-nums sm:text-[220px]">
+            {formatTime(mode === "naming" ? finalElapsed : remaining)}
+          </p>
+
+          {mode === "running" && (
+            <button
+              onClick={handleStop}
+              className="flex items-center gap-2 rounded-lg bg-[#f94444] px-10 py-4 text-[20px] font-semibold text-white"
+            >
+              <Square size={20} fill="white" />
+              Stop
+            </button>
+          )}
+
+          {mode === "naming" && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 p-6">
+              <div className="flex w-full max-w-[420px] flex-col gap-4 rounded-2xl bg-white p-8 text-brand-dark-1">
+                <h3 className="text-[24px] font-semibold">Who just spoke?</h3>
+                <p className="text-[15px] text-brand-dark-3">
+                  Time: {formatTime(finalElapsed)} &middot; {category.label}
+                </p>
+                <input
+                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddSpeaker();
+                  }}
+                  placeholder="Example: Lord Doni ..."
+                  className="h-[50px] rounded-lg border border-black/25 px-4 text-[18px] outline-none focus:border-brand-blue"
+                />
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={handleAddSpeaker}
+                    className="rounded-lg brand-gradient px-6 py-3 text-[15px] font-semibold text-white"
+                  >
+                    Add to Summary
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }
