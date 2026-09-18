@@ -7,6 +7,7 @@ import {
   supabase,
   isSupabaseConfigured,
   CATEGORIES,
+  type Category,
   type BallotSession,
   type BallotSpeaker,
 } from "@/lib/supabase";
@@ -22,7 +23,6 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
   const [session, setSession] = useState<BallotSession | null>(null);
   const [speakers, setSpeakers] = useState<BallotSpeaker[]>([]);
   const [votedCategories, setVotedCategories] = useState<Record<string, string>>({});
-  const [activeIdx, setActiveIdx] = useState(0);
   const voterId = getVoterId();
 
   useEffect(() => {
@@ -68,15 +68,13 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
   }, [code]);
 
   const categoriesInUse = CATEGORIES.filter((c) => speakers.some((s) => s.category === c));
-  const activeCategory = categoriesInUse[activeIdx];
-  const currentSpeakers = speakers.filter((s) => s.category === activeCategory);
 
-  async function vote(speakerId: string) {
-    if (!session || !activeCategory) return;
+  async function vote(speakerId: string, category: Category) {
+    if (!session) return;
     const { error } = await supabase.from("ballot_votes").insert({
       session_id: session.id,
       speaker_id: speakerId,
-      category: activeCategory,
+      category,
       voter_id: voterId,
     });
     if (error) {
@@ -87,7 +85,7 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
       }
       return;
     }
-    setVotedCategories((prev) => ({ ...prev, [activeCategory]: speakerId }));
+    setVotedCategories((prev) => ({ ...prev, [category]: speakerId }));
   }
 
   if (status === "loading") {
@@ -118,7 +116,7 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
   return (
     <>
       <Header />
-      <main className="mx-auto flex w-full max-w-[643px] flex-1 flex-col items-center gap-8 px-6 py-16">
+      <main className="mx-auto flex w-full max-w-[643px] flex-1 flex-col items-center gap-10 px-6 py-16">
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-[32px] font-semibold sm:text-[42px]">Ballot Counter</h1>
           <p className="text-[18px]">Vote for the best speakers!</p>
@@ -129,57 +127,48 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
             No speakers have been added to this session yet.
           </p>
         ) : (
-          <>
-            <div className="flex flex-wrap justify-center gap-4">
-              {categoriesInUse.map((c, i) => (
-                <button
-                  key={c}
-                  onClick={() => setActiveIdx(i)}
-                  className={`flex items-center gap-1.5 rounded-full border border-brand-blue px-5 py-3.5 text-[16px] font-semibold sm:text-[21px] ${
-                    i === activeIdx ? "brand-gradient text-white" : ""
-                  }`}
-                >
-                  {votedCategories[c] && <CheckCircle2 size={16} />}
-                  {c}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex w-full flex-col gap-3.5">
-              {currentSpeakers.map((s) => {
-                const votedFor = votedCategories[activeCategory];
-                const isVotedForThis = votedFor === s.id;
-                const alreadyVoted = Boolean(votedFor);
-                return (
-                  <div
-                    key={s.id}
-                    className={`flex items-center justify-between gap-4 rounded-lg border p-5 ${
-                      isVotedForThis ? "border-brand-blue bg-brand-blue/5" : "border-brand-dark-4"
-                    }`}
-                  >
-                    <p className="font-semibold">{s.name}</p>
-                    <button
-                      disabled={alreadyVoted}
-                      onClick={() => vote(s.id)}
-                      className={`flex w-[110px] shrink-0 items-center justify-center gap-1 rounded-lg py-3 text-[14px] font-semibold text-white disabled:opacity-40 ${
-                        isVotedForThis ? "bg-[#14c801]" : "brand-gradient"
-                      }`}
-                    >
-                      {isVotedForThis ? (
-                        <>
-                          <CheckCircle2 size={16} /> Voted!
-                        </>
-                      ) : (
-                        <>
-                          <VoteIcon size={16} /> Vote!
-                        </>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </>
+          <div className="flex w-full flex-col gap-10">
+            {categoriesInUse.map((category) => {
+              const categorySpeakers = speakers.filter((s) => s.category === category);
+              const votedFor = votedCategories[category];
+              return (
+                <div key={category} className="flex w-full flex-col gap-3.5">
+                  <h2 className="text-[24px] font-semibold text-brand-dark-1">{category}</h2>
+                  {categorySpeakers.map((s) => {
+                    const isVotedForThis = votedFor === s.id;
+                    const alreadyVoted = Boolean(votedFor);
+                    return (
+                      <div
+                        key={s.id}
+                        className={`flex items-center justify-between gap-4 rounded-lg border p-5 ${
+                          isVotedForThis ? "border-brand-blue bg-brand-blue/5" : "border-brand-dark-4"
+                        }`}
+                      >
+                        <p className="font-semibold">{s.name}</p>
+                        <button
+                          disabled={alreadyVoted}
+                          onClick={() => vote(s.id, category)}
+                          className={`flex w-[110px] shrink-0 items-center justify-center gap-1 rounded-lg py-3 text-[14px] font-semibold text-white disabled:opacity-40 ${
+                            isVotedForThis ? "bg-[#14c801]" : "brand-gradient"
+                          }`}
+                        >
+                          {isVotedForThis ? (
+                            <>
+                              <CheckCircle2 size={16} /> Voted!
+                            </>
+                          ) : (
+                            <>
+                              <VoteIcon size={16} /> Vote!
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
         )}
       </main>
     </>

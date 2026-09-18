@@ -212,7 +212,7 @@ export default function BallotAdminPage() {
             </p>
           </div>
 
-          <div className="grid w-full gap-4 sm:grid-cols-3">
+          <div className="flex w-full flex-col gap-4">
             <Field label="Toastmasters Club Name">
               <input
                 value={clubName}
@@ -224,28 +224,30 @@ export default function BallotAdminPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="Room / Location">
-              <input
-                value={room}
-                onChange={(e) => {
-                  setRoom(e.target.value);
-                  setFormError(null);
-                }}
-                placeholder="Example: Mitsubishi Building 4th Floor"
-                className={inputClass}
-              />
-            </Field>
-            <Field label="Date">
-              <input
-                type="date"
-                value={eventDate}
-                onChange={(e) => {
-                  setEventDate(e.target.value);
-                  setFormError(null);
-                }}
-                className={inputClass}
-              />
-            </Field>
+            <div className="grid w-full gap-4 sm:grid-cols-2">
+              <Field label="Room / Location">
+                <input
+                  value={room}
+                  onChange={(e) => {
+                    setRoom(e.target.value);
+                    setFormError(null);
+                  }}
+                  placeholder="Example: Mitsubishi Building 4th Floor"
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Date">
+                <input
+                  type="date"
+                  value={eventDate}
+                  onChange={(e) => {
+                    setEventDate(e.target.value);
+                    setFormError(null);
+                  }}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
           </div>
 
           <div className="grid w-full gap-6 sm:grid-cols-3">
@@ -406,16 +408,22 @@ export default function BallotAdminPage() {
           }}
         >
           <Award size={56} />
-          <p className="text-[16px] font-semibold uppercase tracking-[0.2em] opacity-80">
-            Certificate of Achievement
+          <p className="text-[28px] font-semibold sm:text-[36px]">Congratulations!</p>
+          <p className="text-[20px] font-medium opacity-90">
+            You&rsquo;re the Best {certificate}
           </p>
-          <p className="text-[24px] font-medium opacity-90">{certificate}</p>
           <p className="max-w-[700px] text-[40px] font-semibold leading-tight sm:text-[56px]">
             {winnerFor(certificate).label}
           </p>
-          <p className="text-[16px] opacity-80">
-            {clubName} &middot; {room} &middot; {formatDate(eventDate)}
+          <p className="max-w-[520px] text-[16px] leading-[1.5] opacity-80">
+            Keep practicing, keep growing, and keep inspiring others with your voice.
           </p>
+          <div className="mt-4 flex flex-col items-center gap-1">
+            <p className="text-[16px] font-semibold opacity-90">{clubName}</p>
+            <p className="text-[14px] opacity-70">
+              {room} | {formatDate(eventDate)}
+            </p>
+          </div>
           <span className="mt-4 text-white/70">Tap anywhere to close</span>
         </div>
       )}
