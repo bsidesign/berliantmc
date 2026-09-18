@@ -106,7 +106,7 @@ export default function BallotAdminPage() {
 
   return (
     <>
-      <Header section="Ballot Counter" />
+      <Header />
       <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col items-center gap-10 px-6 py-16">
         {!session ? (
           <div className="flex max-w-[500px] flex-col items-center gap-4 text-center">

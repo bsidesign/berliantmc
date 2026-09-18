@@ -104,7 +104,7 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
   if (status === "not-found") {
     return (
       <>
-        <Header section="Ballot Counter" />
+        <Header />
         <main className="flex flex-1 items-center justify-center p-8 text-center">
           <p className="text-brand-dark-3">
             No open voting session found for code <strong>{code}</strong>. Double-check
