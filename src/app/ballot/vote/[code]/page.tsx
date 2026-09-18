@@ -93,7 +93,7 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
   if (status === "loading") {
     return (
       <>
-        <Header section="Ballot Counter" />
+        <Header />
         <main className="flex flex-1 items-center justify-center p-8">
           <p className="text-brand-dark-3">Loading session...</p>
         </main>

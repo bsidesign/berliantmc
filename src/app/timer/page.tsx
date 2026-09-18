@@ -114,7 +114,7 @@ export default function TimerPage() {
 
   return (
     <>
-      <Header section="Timer" />
+      <Header />
       <main className="flex flex-1 flex-col items-center">
         <div className="mx-auto flex w-full max-w-[1200px] flex-col items-center gap-8 px-6 pt-16 pb-16">
         <div className="flex max-w-[730px] flex-col gap-1 text-center">

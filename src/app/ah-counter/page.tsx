@@ -92,7 +92,7 @@ export default function AhCounterPage() {
 
   return (
     <>
-      <Header section="Ah &amp; WoD Counter" />
+      <Header />
       <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col items-center gap-10 px-6 py-16">
         <div className="flex max-w-[644px] flex-col gap-1 text-center">
           <h1 className="text-[32px] font-semibold leading-tight sm:text-[42px]">

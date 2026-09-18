@@ -1,29 +1,29 @@
+import Image from "next/image";
 import Link from "next/link";
-import { Globe2 } from "lucide-react";
 
-type HeaderProps = {
-  /** Current section label shown in the brand gradient, e.g. "Home", "Timer". */
-  section?: string;
-};
-
-// Shared top bar for every screen. The real Toastmasters globe logo from the
-// Figma file couldn't be exported in this environment (network-restricted) —
-// this is a placeholder mark. Drop the real logo file at
-// public/assets/logo.png and swap the <Globe2> block below for an <img>.
-export default function Header({ section = "Home" }: HeaderProps) {
+// Shared top bar for every screen. Left side is the official Toastmasters
+// International logo (linking home); right side is a single "Menu" link
+// that also goes home.
+export default function Header() {
   return (
     <header className="border-b border-brand-dark-4">
       <div className="mx-auto flex h-[88px] w-full max-w-[1200px] items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2 shrink-0">
-          <span className="flex size-9 items-center justify-center rounded-full brand-gradient text-white">
-            <Globe2 size={20} />
-          </span>
-          <span className="font-semibold text-brand-dark-2">Berlian TMC</span>
+        <Link href="/" className="flex shrink-0 items-center">
+          <Image
+            src="/assets/toastmasters-logo.png"
+            alt="Toastmasters International"
+            width={56}
+            height={56}
+            className="h-14 w-14 object-contain"
+            priority
+          />
         </Link>
-        <div className="flex items-center gap-4 text-[16px] font-semibold whitespace-nowrap">
-          <span className="brand-gradient-text">{section}</span>
-          <span className="text-brand-dark-2">Berlian Toastmasters</span>
-        </div>
+        <Link
+          href="/"
+          className="text-[16px] font-semibold text-brand-dark-2 transition-opacity hover:opacity-70"
+        >
+          Menu
+        </Link>
       </div>
     </header>
   );

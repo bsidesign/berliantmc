@@ -92,7 +92,7 @@ export default function BallotAdminPage() {
   if (!isSupabaseConfigured) {
     return (
       <>
-        <Header section="Ballot Counter" />
+        <Header />
         <main className="flex flex-1 items-center justify-center p-8 text-center">
           <p className="max-w-[500px] text-brand-dark-3">
             Ballot Counter isn&rsquo;t connected to a database yet. Add the

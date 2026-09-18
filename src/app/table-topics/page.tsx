@@ -34,7 +34,7 @@ export default function TableTopicsPage() {
 
   return (
     <>
-      <Header section="Table Topics Master" />
+      <Header />
       <main className="mx-auto flex w-full max-w-[900px] flex-1 flex-col items-center gap-8 px-6 py-16">
         <div className="flex max-w-[700px] flex-col items-center gap-6 text-center">
           <div className="flex flex-col gap-1">

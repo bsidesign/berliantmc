@@ -5,7 +5,7 @@ import { TOOLS } from "@/lib/tools";
 export default function HomePage() {
   return (
     <>
-      <Header section="Home" />
+      <Header />
       <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col items-center gap-10 px-6 py-16">
         <div className="flex max-w-[589px] flex-col gap-2 text-center">
           <h1 className="text-[32px] font-semibold leading-tight sm:text-[42px]">
@@ -17,7 +17,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="flex w-full max-w-[664px] flex-wrap justify-center gap-8">
+        <div className="flex w-full max-w-[832px] flex-wrap justify-center gap-8">
           {TOOLS.map((tool) => (
             <RoleCard key={tool.href} {...tool} />
           ))}
