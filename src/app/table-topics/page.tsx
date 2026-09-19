@@ -18,7 +18,7 @@ export default function TableTopicsPage() {
   const [count, setCount] = useState(5);
   const [topics, setTopics] = useState<string[]>([]);
   const [opened, setOpened] = useState<Set<number>>(new Set());
-  const [reveal, setReveal] = useState<number | null>(null);
+    const [reveal, setReveal] = useState<number | null>(null);
 
   function handleGenerate() {
     setTopics(randomTopics(count, theme));
