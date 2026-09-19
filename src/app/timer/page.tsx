@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Play, Square, RotateCcw, Trash2, X } from "lucide-react";
+import { Play, Square, RotateCcw, Trash2, X, ChevronDown } from "lucide-react";
 import Header from "@/components/Header";
 import { TIMER_CATEGORIES, type TimerCategory, formatTime } from "@/lib/timer-categories";
 
@@ -126,12 +126,12 @@ export default function TimerPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-4">
+        <div className="hidden flex-wrap justify-center gap-4 sm:flex">
           {TIMER_CATEGORIES.map((c) => (
             <button
               key={c.id}
               onClick={() => selectCategory(c)}
-              className={`rounded-full border border-brand-blue px-4 py-3.5 text-[21px] font-semibold transition-colors ${
+              className={`rounded-full border border-brand-blue px-4 py-2 text-[18px] font-semibold transition-colors ${
                 c.id === categoryId ? "brand-gradient text-white" : "text-brand-dark-1"
               }`}
             >
@@ -140,7 +140,28 @@ export default function TimerPage() {
           ))}
         </div>
 
-        <div className="flex w-full max-w-[758px] flex-col items-center gap-4 rounded-2xl border border-brand-dark-4 bg-white py-10 text-brand-dark-1">
+        <div className="relative w-full max-w-[320px] sm:hidden">
+          <select
+            value={categoryId}
+            onChange={(e) => {
+              const next = TIMER_CATEGORIES.find((c) => c.id === e.target.value);
+              if (next) selectCategory(next);
+            }}
+            className="h-[50px] w-full appearance-none rounded-lg border border-brand-blue px-4 pr-10 text-[18px] font-semibold text-brand-dark-1 outline-none focus:border-brand-blue"
+          >
+            {TIMER_CATEGORIES.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            size={18}
+            className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-brand-dark-1"
+          />
+        </div>
+
+        <div className="flex w-full max-w-[800px] flex-col items-center gap-4 rounded-2xl border border-brand-dark-4 bg-white py-10 text-brand-dark-1">
           <p className="text-[96px] font-semibold leading-none tabular-nums sm:text-[160px]">
             {formatTime(remaining)}
           </p>
@@ -169,11 +190,11 @@ export default function TimerPage() {
         </div>
         </div>
 
-        <section className="flex w-full flex-1 flex-col py-8 brand-gradient">
+        <section className="flex w-full flex-1 flex-col px-6 py-8 brand-gradient sm:px-0">
           <h2 className="mb-6 text-center text-[32px] font-extrabold text-white sm:text-[42px]">
             Timer Summary
           </h2>
-          <div className="mx-auto w-[92%] overflow-x-auto rounded-lg border border-brand-dark-4">
+          <div className="mx-auto w-full max-w-[800px] overflow-x-auto rounded-lg border border-brand-dark-4">
             <table className="w-full min-w-[640px] text-left text-white">
               <thead>
                 <tr className="bg-white/5 uppercase">
