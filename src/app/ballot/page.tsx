@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Trophy, Copy, Check, X, Award, Plus } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import confetti from "canvas-confetti";
 import Header from "@/components/Header";
 import {
   supabase,
@@ -29,6 +30,16 @@ function formatDate(iso: string) {
     month: "long",
     day: "numeric",
   });
+}
+
+// A short two-sided confetti burst, fired whenever a winner certificate opens.
+function fireConfetti() {
+  const end = Date.now() + 1200;
+  (function frame() {
+    confetti({ particleCount: 4, angle: 60, spread: 55, origin: { x: 0 } });
+    confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1 } });
+    if (Date.now() < end) requestAnimationFrame(frame);
+  })();
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -171,16 +182,31 @@ export default function BallotAdminPage() {
 
   function winnerFor(category: Category) {
     const list = speakers.filter((s) => s.category === category);
-    if (list.length === 0) return { label: "No speakers added", names: [] as string[] };
+    if (list.length === 0) {
+      return { status: "no-speakers" as const, names: [] as string[] };
+    }
     const tally = list.map((s) => ({
       name: s.name,
       count: votes.filter((v) => v.speaker_id === s.id).length,
     }));
     const top = Math.max(...tally.map((t) => t.count));
+    if (top === 0) {
+      return { status: "no-votes" as const, names: [] as string[] };
+    }
+    // A single top scorer is the automatic winner; a tie lists every name.
     const winners = tally.filter((t) => t.count === top).map((t) => t.name);
-    if (top === 0) return { label: "No votes were cast", names: winners };
-    return { label: winners.join(" & "), names: winners };
+    return { status: "decided" as const, names: winners };
   }
+
+  function votesFor(category: Category) {
+    return votes.filter((v) => v.category === category).length;
+  }
+
+  // Every time a certificate opens (first reveal or reopening one already
+  // revealed), celebrate with a short confetti burst.
+  useEffect(() => {
+    if (certificate) fireConfetti();
+  }, [certificate]);
 
   if (!isSupabaseConfigured) {
     return (
@@ -212,7 +238,7 @@ export default function BallotAdminPage() {
             </p>
           </div>
 
-          <div className="flex w-full flex-col gap-4">
+          <div className="flex w-full max-w-[720px] flex-col gap-4">
             <Field label="Toastmasters Club Name">
               <input
                 value={clubName}
@@ -349,6 +375,18 @@ export default function BallotAdminPage() {
               {copied ? "Copied!" : "Copy voting link"}
             </button>
           </div>
+
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-[13px] font-semibold uppercase tracking-wide opacity-80">
+              People Voted
+            </p>
+            {CATEGORIES.map((category) => (
+              <p key={category} className="text-[15px] font-medium">
+                {category} ({votesFor(category)})
+              </p>
+            ))}
+          </div>
+
           <button
             onClick={() => setStage("results")}
             className="flex items-center gap-2 rounded-lg bg-white px-8 py-4 text-[16px] font-semibold text-brand-blue"
@@ -412,9 +450,31 @@ export default function BallotAdminPage() {
           <p className="text-[20px] font-medium opacity-90">
             You&rsquo;re the Best {certificate}
           </p>
-          <p className="max-w-[700px] text-[40px] font-semibold leading-tight sm:text-[56px]">
-            {winnerFor(certificate).label}
-          </p>
+          {(() => {
+            const result = winnerFor(certificate);
+            if (result.status === "no-speakers") {
+              return (
+                <p className="text-[28px] font-semibold sm:text-[36px]">No speakers added</p>
+              );
+            }
+            if (result.status === "no-votes") {
+              return (
+                <p className="text-[28px] font-semibold sm:text-[36px]">No votes were cast</p>
+              );
+            }
+            return (
+              <div className="flex flex-col items-center gap-1">
+                {result.names.map((n) => (
+                  <p
+                    key={n}
+                    className="max-w-[700px] text-[40px] font-semibold leading-tight sm:text-[56px]"
+                  >
+                    {n}
+                  </p>
+                ))}
+              </div>
+            );
+          })()}
           <p className="max-w-[520px] text-[16px] leading-[1.5] opacity-80">
             Keep practicing, keep growing, and keep inspiring others with your voice.
           </p>

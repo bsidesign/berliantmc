@@ -1,4 +1,11 @@
 @import "tailwindcss";
+/* Reserve scrollbar space on both edges so centered content (like the
+   Ballot Counter form) doesn't shift left on pages tall enough to scroll —
+   without this, the right-hand scrollbar eats into the right margin only,
+   making centered containers look off-balance. */
+html {
+  scrollbar-gutter: stable both-edges;
+}
 
 :root {
   /* Stand-in for the Figma spec's "Clash Grotesk" (not freely embeddable) —
