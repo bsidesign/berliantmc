@@ -35,15 +35,6 @@ type Speaker = {
   wod: number;
 };
 
-function initials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
-}
-
 export default function AhCounterPage() {
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [name, setName] = useState("");
@@ -156,17 +147,14 @@ export default function AhCounterPage() {
         {speakers.length === 0 ? (
           <p className="text-brand-dark-3">No speakers added yet.</p>
         ) : (
-          <div className="flex w-full flex-wrap justify-center gap-7">
+          <div className="grid w-full grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-3">
             {speakers.map((s) => (
               <div
                 key={s.id}
-                className="flex w-[382px] flex-col items-center gap-6 rounded-lg border border-brand-blue px-5 py-8"
+                className="flex flex-col items-center gap-6 rounded-lg border border-brand-blue px-5 py-8"
               >
                 <div className="flex flex-col items-center gap-2 text-center">
-                  <span className="flex size-12 items-center justify-center rounded-full brand-gradient text-[24px] font-semibold text-white">
-                    {initials(s.name)}
-                  </span>
-                  <p className="text-[24px] font-semibold">{s.name}</p>
+                  <p className="text-[24px] font-extrabold">{s.name}</p>
                   <p className="brand-gradient-text text-[21px] font-medium">{s.role}</p>
                 </div>
                 <div className="flex w-full flex-col gap-4 px-5">
@@ -204,23 +192,21 @@ function CounterRow({
   onPlus: () => void;
 }) {
   return (
-    <div className="flex w-full items-center justify-center gap-4">
-      <span className="w-[50px] text-[18px] font-semibold">{label}</span>
-      <div className="flex items-center gap-2">
+    <div className="flex w-full items-center justify-between gap-4">
+      <span className="text-[18px] font-semibold text-brand-dark-1">{label}</span>
+      <div className="flex h-[44px] items-center overflow-hidden rounded-full border border-black/25">
         <button
           onClick={onMinus}
-          className="flex h-[50px] w-[55px] items-center justify-center rounded-lg border border-black/30 text-[28px] font-semibold"
+          className="flex h-full w-[44px] items-center justify-center text-[20px] font-bold text-brand-dark-1"
         >
           −
         </button>
-        <span className="w-[50px] text-center text-[33px] font-semibold">{value}</span>
+        <span className="flex h-full w-[54px] items-center justify-center border-x border-black/25 text-[20px] font-extrabold text-brand-dark-1">
+          {value}
+        </span>
         <button
           onClick={onPlus}
-          className="flex h-[50px] w-[55px] items-center justify-center rounded-lg text-[28px] font-semibold text-white"
-          style={{
-            backgroundImage:
-              "linear-gradient(150deg, rgb(249,68,68) 6%, rgb(111,0,0) 128%)",
-          }}
+          className="flex h-full w-[44px] items-center justify-center bg-[#f94444] text-[20px] font-bold text-white"
         >
           +
         </button>
