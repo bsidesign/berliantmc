@@ -7,6 +7,11 @@ import { randomTopics } from "@/lib/table-topics-bank";
 
 type Mode = "text" | "image";
 
+const MODES: { id: Mode; label: string; icon: typeof PenLine }[] = [
+  { id: "text", label: "Text Based", icon: PenLine },
+  { id: "image", label: "Image Based", icon: ImageIcon },
+];
+
 export default function TableTopicsPage() {
   const [mode, setMode] = useState<Mode>("text");
   const [theme, setTheme] = useState("");
@@ -48,23 +53,36 @@ export default function TableTopicsPage() {
             </p>
           </div>
 
-          <div className="flex gap-4">
-            <button
-              onClick={() => setMode("text")}
-              className={`flex items-center gap-2 rounded-full border border-brand-blue px-4 py-3.5 text-[21px] font-semibold ${
-                mode === "text" ? "brand-gradient text-white" : ""
-              }`}
+          <div className="hidden gap-4 sm:flex">
+            {MODES.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setMode(id)}
+                className={`flex items-center gap-2 rounded-full border border-brand-blue px-4 py-2 text-[18px] font-semibold transition-colors ${
+                  mode === id ? "brand-gradient text-white" : ""
+                }`}
+              >
+                <Icon size={18} /> {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative w-full max-w-[320px] sm:hidden">
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value as Mode)}
+              className="h-[50px] w-full appearance-none rounded-lg border border-brand-blue px-4 pr-10 text-[18px] font-semibold text-brand-dark-1 outline-none focus:border-brand-blue"
             >
-              <PenLine size={20} /> Text Based
-            </button>
-            <button
-              onClick={() => setMode("image")}
-              className={`flex items-center gap-2 rounded-full border border-brand-blue px-4 py-3.5 text-[21px] font-semibold ${
-                mode === "image" ? "brand-gradient text-white" : ""
-              }`}
-            >
-              <ImageIcon size={20} /> Image Based
-            </button>
+              {MODES.map(({ id, label }) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={18}
+              className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-brand-dark-1"
+            />
           </div>
         </div>
 
@@ -87,7 +105,7 @@ export default function TableTopicsPage() {
                 className="w-full rounded-lg border border-brand-dark-3 p-4 text-[18px] outline-none focus:border-brand-blue"
               />
             </div>
-            <div className="flex w-full items-center justify-between gap-4">
+            <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-4">
                 <span className="text-[18px]">How many topics?</span>
                 <div className="relative">
@@ -109,11 +127,11 @@ export default function TableTopicsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center">
                 {topics.length > 0 && (
                   <button
                     onClick={handleClear}
-                    className="flex items-center gap-2 rounded-lg border border-black/25 px-6 py-3.5 text-[16px] font-semibold text-brand-dark-2"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-black/25 px-6 py-3.5 text-[16px] font-semibold text-brand-dark-2 sm:w-auto"
                   >
                     <X size={18} />
                     Clear
@@ -121,11 +139,7 @@ export default function TableTopicsPage() {
                 )}
                 <button
                   onClick={handleGenerate}
-                  className="rounded-lg px-6 py-3.5 text-[16px] font-semibold text-white"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(160deg, rgb(249,68,68) 6%, rgb(111,0,0) 128%)",
-                  }}
+                  className="w-full rounded-lg brand-gradient px-6 py-3.5 text-[16px] font-semibold text-white sm:w-auto"
                 >
                   Generate Table Topic&rsquo;s
                 </button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Play, Square, RotateCcw, Trash2, X, ChevronDown } from "lucide-react";
+import { Play, Square, Trash2, X, ChevronDown } from "lucide-react";
 import Header from "@/components/Header";
 import { TIMER_CATEGORIES, type TimerCategory, formatTime } from "@/lib/timer-categories";
 
@@ -52,6 +52,7 @@ export default function TimerPage() {
   const [finalElapsed, setFinalElapsed] = useState(0);
   const [name, setName] = useState("");
   const [rows, setRows] = useState<SummaryRow[]>([]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function selectCategory(next: TimerCategory) {
@@ -112,6 +113,17 @@ export default function TimerPage() {
     handleReset();
   }
 
+  function requestDeleteRow(id: string) {
+    setConfirmDeleteId(id);
+  }
+
+  function confirmDeleteRow() {
+    setRows((prev) => prev.filter((r) => r.id !== confirmDeleteId));
+    setConfirmDeleteId(null);
+  }
+
+  const rowPendingDelete = rows.find((r) => r.id === confirmDeleteId) ?? null;
+
   return (
     <>
       <Header />
@@ -171,22 +183,13 @@ export default function TimerPage() {
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          <div className="flex gap-4">
-            <button
-              onClick={handleStart}
-              className="flex items-center gap-2 rounded-lg bg-[#14c801] px-6 py-3.5 text-[16px] font-semibold text-white"
-            >
-              <Play size={18} />
-              Start
-            </button>
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-2 rounded-lg border border-current px-6 py-3.5 text-[16px] font-semibold"
-            >
-              <RotateCcw size={18} />
-              Reset
-            </button>
-          </div>
+          <button
+            onClick={handleStart}
+            className="flex items-center gap-2 rounded-lg bg-[#14c801] px-6 py-3.5 text-[16px] font-semibold text-white"
+          >
+            <Play size={18} />
+            Start
+          </button>
         </div>
         </div>
 
@@ -194,46 +197,85 @@ export default function TimerPage() {
           <h2 className="mb-6 text-center text-[32px] font-extrabold text-white sm:text-[42px]">
             Timer Summary
           </h2>
-          <div className="mx-auto w-full max-w-[800px] overflow-x-auto rounded-lg border border-brand-dark-4">
-            <table className="w-full min-w-[640px] text-left text-white">
-              <thead>
-                <tr className="bg-white/5 uppercase">
-                  <th className="p-3.5 text-[14px] font-normal">Toastmaster&rsquo;s Name</th>
-                  <th className="p-3.5 text-[14px] font-normal">Speech Category</th>
-                  <th className="p-3.5 text-[14px] font-normal">Time</th>
-                  <th className="p-3.5 text-[14px] font-normal">Note</th>
-                  <th className="p-3.5 text-[14px] font-normal">Delete</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center">
-                      No data to display.
-                    </td>
+          <div className="mx-auto w-full max-w-[800px]">
+            {/* Desktop / tablet: table */}
+            <div className="hidden overflow-x-auto rounded-lg border border-brand-dark-4 sm:block">
+              <table className="w-full min-w-[640px] text-left text-white">
+                <thead>
+                  <tr className="bg-white/5 uppercase">
+                    <th className="p-3.5 text-[14px] font-normal">Toastmaster&rsquo;s Name</th>
+                    <th className="p-3.5 text-[14px] font-normal">Speech Category</th>
+                    <th className="p-3.5 text-[14px] font-normal">Time</th>
+                    <th className="p-3.5 text-[14px] font-normal">Note</th>
+                    <th className="p-3.5 text-[14px] font-normal">Delete</th>
                   </tr>
-                ) : (
-                  rows.map((row) => (
-                    <tr key={row.id} className="border-t border-white/20">
-                      <td className="p-3.5">{row.name}</td>
-                      <td className="p-3.5">{row.category}</td>
-                      <td className="p-3.5">{row.time}</td>
-                      <td className="p-3.5">{row.note}</td>
-                      <td className="p-3.5">
-                        <button
-                          onClick={() =>
-                            setRows((prev) => prev.filter((r) => r.id !== row.id))
-                          }
-                          aria-label="Delete row"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                </thead>
+                <tbody>
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center">
+                        No data to display.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    rows.map((row) => (
+                      <tr key={row.id} className="border-t border-white/20">
+                        <td className="p-3.5">{row.name}</td>
+                        <td className="p-3.5">{row.category}</td>
+                        <td className="p-3.5">{row.time}</td>
+                        <td className="p-3.5">{row.note}</td>
+                        <td className="p-3.5">
+                          <button onClick={() => requestDeleteRow(row.id)} aria-label="Delete row">
+                            <Trash2 size={18} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile: stacked cards, no horizontal scroll needed */}
+            <div className="flex flex-col gap-3 sm:hidden">
+              {rows.length === 0 ? (
+                <div className="rounded-lg border border-brand-dark-4 p-8 text-center text-white">
+                  No data to display.
+                </div>
+              ) : (
+                rows.map((row) => (
+                  <div
+                    key={row.id}
+                    className="flex flex-col gap-3 rounded-lg border border-brand-dark-4 bg-white/5 p-4 text-white"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-[16px] font-semibold">{row.name}</p>
+                      <button
+                        onClick={() => requestDeleteRow(row.id)}
+                        aria-label="Delete row"
+                        className="shrink-0 text-white/80 hover:text-white"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-1.5 text-[14px]">
+                      <p>
+                        <span className="text-white/60">Speech Category: </span>
+                        {row.category}
+                      </p>
+                      <p>
+                        <span className="text-white/60">Time: </span>
+                        {row.time}
+                      </p>
+                      <p>
+                        <span className="text-white/60">Note: </span>
+                        {row.note}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </section>
       </main>
@@ -297,6 +339,32 @@ export default function TimerPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {rowPendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+          <div className="flex w-full max-w-[380px] flex-col gap-4 rounded-2xl bg-white p-8 text-center text-brand-dark-1">
+            <h3 className="text-[21px] font-extrabold">Delete This Entry?</h3>
+            <p className="text-[15px] text-brand-dark-3">
+              Remove <span className="font-semibold text-brand-dark-1">{rowPendingDelete.name}</span>&rsquo;s
+              row from the Timer Summary. This can&rsquo;t be undone.
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="rounded-lg border border-black/25 px-6 py-3 text-[15px] font-semibold text-brand-dark-2"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteRow}
+                className="rounded-lg bg-[#f94444] px-6 py-3 text-[15px] font-semibold text-white"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>
