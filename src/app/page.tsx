@@ -23,7 +23,7 @@ export default function HomePage() {
           ))}
         </div>
       </main>
-      <footer className="pb-8 text-center text-[14px] text-brand-dark-3">
+      <footer className="pb-8 text-center text-[14px] text-brand-dark-3 opacity-50">
         Designed and Developed by Muzakki from Berlian Toastmasters Club
       </footer>
     </>
