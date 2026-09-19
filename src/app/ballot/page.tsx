@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Trophy, Copy, Check, X, Award, Plus } from "lucide-react";
+import { Trophy, Copy, Check, X, Award, Plus, SquareUserRound } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
 import Header from "@/components/Header";
@@ -439,52 +439,64 @@ export default function BallotAdminPage() {
 
       {certificate && (
         <div
-          className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center gap-6 p-10 text-center text-white brand-gradient"
+          className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-between gap-10 overflow-y-auto p-10 text-white brand-gradient sm:flex-row sm:gap-16 sm:p-16"
           onClick={() => {
             setRevealed((prev) => ({ ...prev, [certificate]: true }));
             setCertificate(null);
           }}
         >
-          <Award size={56} />
-          <p className="text-[28px] font-semibold sm:text-[36px]">Congratulations!</p>
-          <p className="text-[20px] font-medium opacity-90">
-            You&rsquo;re the Best {certificate}
-          </p>
-          {(() => {
-            const result = winnerFor(certificate);
-            if (result.status === "no-speakers") {
-              return (
-                <p className="text-[28px] font-semibold sm:text-[36px]">No speakers added</p>
-              );
-            }
-            if (result.status === "no-votes") {
-              return (
-                <p className="text-[28px] font-semibold sm:text-[36px]">No votes were cast</p>
-              );
-            }
-            return (
-              <div className="flex flex-col items-center gap-1">
-                {result.names.map((n) => (
-                  <p
-                    key={n}
-                    className="max-w-[700px] text-[40px] font-semibold leading-tight sm:text-[56px]"
-                  >
-                    {n}
-                  </p>
-                ))}
-              </div>
-            );
-          })()}
-          <p className="max-w-[520px] text-[16px] leading-[1.5] opacity-80">
-            Keep practicing, keep growing, and keep inspiring others with your voice.
-          </p>
-          <div className="mt-4 flex flex-col items-center gap-1">
-            <p className="text-[16px] font-semibold opacity-90">{clubName}</p>
-            <p className="text-[14px] opacity-70">
-              {room} | {formatDate(eventDate)}
+          <div className="flex w-full flex-1 flex-col items-start gap-6 text-left">
+            <Award size={56} />
+            <p className="text-[28px] font-semibold sm:text-[36px]">Congratulations!</p>
+            <p className="rounded-lg border border-white px-4 py-2 text-[20px] font-medium opacity-90">
+              You&rsquo;re the Best {certificate}
             </p>
+            {(() => {
+              const result = winnerFor(certificate);
+              if (result.status === "no-speakers") {
+                return (
+                  <p className="text-[28px] font-semibold sm:text-[36px]">No speakers added</p>
+                );
+              }
+              if (result.status === "no-votes") {
+                return (
+                  <p className="text-[28px] font-semibold sm:text-[36px]">No votes were cast</p>
+                );
+              }
+              return (
+                <div className="flex flex-col items-start gap-1">
+                  {result.names.map((n) => (
+                    <p
+                      key={n}
+                      className="text-[40px] font-extrabold leading-tight sm:text-[56px]"
+                    >
+                      {n}
+                    </p>
+                  ))}
+                </div>
+              );
+            })()}
+            <p className="text-[16px] leading-[1.5] opacity-80">
+              Keep practicing, keep growing,
+              <br />
+              and keep inspiring others with your voice.
+            </p>
+            <div className="mt-4 flex flex-col items-start gap-1">
+              <p className="text-[16px] font-semibold opacity-90">{clubName}</p>
+              <p className="text-[14px] opacity-70">
+                {room} | {formatDate(eventDate)}
+              </p>
+            </div>
           </div>
-          <span className="mt-4 text-white/70">Tap anywhere to close</span>
+
+          {/* Photo-op backdrop: point the winner here for the on-stage photo. */}
+            <div className="flex shrink-0 items-center justify-center rounded-[40px] bg-white/10 p-6 opacity-50 sm:p-10">
+            <SquareUserRound size={180} strokeWidth={1} className="text-white sm:size-[240px]" />
+          </div>
+
+          <span className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/90">
+            Tap anywhere to close
+          </span>
         </div>
       )}
     </>
