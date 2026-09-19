@@ -153,9 +153,9 @@ export default function AhCounterPage() {
                 key={s.id}
                 className="flex flex-col items-center gap-6 rounded-lg border border-brand-blue px-5 py-8"
               >
-                <div className="flex flex-col items-center gap-2 text-center">
+                <div className="flex flex-col items-center gap-0 text-center">
                   <p className="text-[24px] font-extrabold">{s.name}</p>
-                  <p className="brand-gradient-text text-[21px] font-medium">{s.role}</p>
+                  <p className="brand-gradient-text text-[18px] font-medium">{s.role}</p>
                 </div>
                 <div className="flex w-full flex-col gap-4 px-5">
                   <CounterRow
