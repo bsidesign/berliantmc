@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Trophy, Copy, Check, X, Award, Plus, SquareUserRound } from "lucide-react";
+import { Trophy, Copy, Check, X, Award, Plus, UserRound } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
 import Header from "@/components/Header";
@@ -439,7 +439,7 @@ export default function BallotAdminPage() {
 
       {certificate && (
         <div
-          className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-between gap-10 overflow-y-auto p-10 text-white brand-gradient sm:flex-row sm:gap-16 sm:p-16"
+          className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-between gap-10 overflow-y-auto px-10 py-10 text-white brand-gradient sm:flex-row sm:px-[20vw] sm:py-16"
           onClick={() => {
             setRevealed((prev) => ({ ...prev, [certificate]: true }));
             setCertificate(null);
@@ -448,7 +448,7 @@ export default function BallotAdminPage() {
           <div className="flex w-full flex-1 flex-col items-start gap-6 text-left">
             <Award size={56} />
             <p className="text-[28px] font-semibold sm:text-[36px]">Congratulations!</p>
-            <p className="rounded-lg border border-white px-4 py-2 text-[20px] font-medium opacity-90">
+            <p className="rounded-lg border border-white px-4 py-2 text-[20px] font-medium uppercase opacity-90">
               You&rsquo;re the Best {certificate}
             </p>
             {(() => {
@@ -476,7 +476,7 @@ export default function BallotAdminPage() {
                 </div>
               );
             })()}
-            <p className="text-[16px] leading-[1.5] opacity-80">
+            <p className="text-[16px] leading-[1.5] text-white opacity-100">
               Keep practicing, keep growing,
               <br />
               and keep inspiring others with your voice.
@@ -490,11 +490,11 @@ export default function BallotAdminPage() {
           </div>
 
           {/* Photo-op backdrop: point the winner here for the on-stage photo. */}
-            <div className="flex shrink-0 items-center justify-center rounded-[40px] bg-white/10 p-6 opacity-50 sm:p-10">
-            <SquareUserRound size={180} strokeWidth={1} className="text-white sm:size-[240px]" />
+          <div className="flex shrink-0 items-center justify-center rounded-[40px] bg-white/10 p-6 opacity-40 sm:p-10">
+            <UserRound size={180} fill="currentColor" stroke="none" className="text-white sm:size-[240px]" />
           </div>
 
-          <span className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/90">
+          <span className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/40">
             Tap anywhere to close
           </span>
         </div>
