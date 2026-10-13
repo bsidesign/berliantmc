@@ -5,6 +5,7 @@ import { PenLine, ImageIcon, Check, ChevronDown, Eye, Maximize2, X } from "lucid
 import Header from "@/components/Header";
 import { randomTopics } from "@/lib/table-topics-bank";
 import { pickRelevantImages, type TaggedImage } from "@/lib/table-topics-image-match";
+import { useRequireActiveMeeting } from "@/lib/use-meeting";
 
 type Mode = "text" | "image";
 
@@ -14,6 +15,11 @@ const MODES: { id: Mode; label: string; icon: typeof PenLine }[] = [
 ];
 
 export default function TableTopicsClient({ images }: { images: TaggedImage[] }) {
+  // Table Topics doesn't need the speaker list, but it still belongs to a
+  // meeting: this sends people without one back to the start screen and
+  // remembers TTM as this device's role.
+  useRequireActiveMeeting("/table-topics");
+
   const [mode, setMode] = useState<Mode>("text");
   const [theme, setTheme] = useState("");
   const [count, setCount] = useState(5);
@@ -178,7 +184,7 @@ export default function TableTopicsClient({ images }: { images: TaggedImage[] })
                   onClick={handleGenerate}
                   className="w-full rounded-lg brand-gradient px-6 py-3.5 text-[16px] font-semibold text-white sm:w-auto"
                 >
-                  {mode === "image" ? "Generate Images" : "Generate Table Topic's"}
+                  {mode === "image" ? "Generate Images" : "Generate Table Topic’s"}
                 </button>
               </div>
             </div>

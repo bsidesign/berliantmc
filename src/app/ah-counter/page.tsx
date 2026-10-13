@@ -1,89 +1,52 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, UserPlus } from "lucide-react";
 import Header from "@/components/Header";
-
-const ROLES = [
-  "TOM",
-  "Prepared Speech",
-  "Evaluator",
-  "Table Topic Speaker",
-  "Ah & WoD Counter",
-  "Grammarian",
-  "Timer",
-  "General Evaluator",
-];
-
-// Maximum number of role takers allowed per role in a single meeting.
-const ROLE_MAX: Record<string, number> = {
-  TOM: 1,
-  "Prepared Speech": 5,
-  Evaluator: 5,
-  "Table Topic Speaker": 10,
-  "Ah & WoD Counter": 1,
-  Grammarian: 1,
-  Timer: 1,
-  "General Evaluator": 1,
-};
-
-type Speaker = {
-  id: string;
-  name: string;
-  role: string;
-  filler: number;
-  wod: number;
-};
+import MeetingBar from "@/components/MeetingBar";
+import { bumpCount, type Speaker } from "@/lib/meeting";
+import { useRequireMeeting } from "@/lib/use-meeting";
 
 export default function AhCounterPage() {
-  const [speakers, setSpeakers] = useState<Speaker[]>([]);
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const { meeting, speakers, ready, configured, patchSpeaker, runMutation } =
+    useRequireMeeting("/ah-counter");
 
-  function addSpeaker() {
-    if (!name.trim() && !role) {
-      setError("Please enter a name and choose a role.");
-      return;
-    }
-    if (!name.trim()) {
-      setError("Please enter the Toastmaster's name.");
-      return;
-    }
-    if (!role) {
-      setError("Please choose a role.");
-      return;
-    }
-
-    const max = ROLE_MAX[role] ?? Infinity;
-    const currentCount = speakers.filter((s) => s.role === role).length;
-    if (currentCount >= max) {
-      setError(
-        `${role} already has the maximum of ${max} role taker${max === 1 ? "" : "s"}.`
-      );
-      return;
-    }
-
-    setError(null);
-    setSpeakers((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), name: name.trim(), role, filler: 0, wod: 0 },
-    ]);
-    setName("");
-    setRole("");
+  function bump(speaker: Speaker, field: "filler" | "wod", delta: number) {
+    const key = field === "filler" ? "filler_count" : "wod_count";
+    const next = Math.max(0, speaker[key] + delta);
+    if (next === speaker[key]) return;
+    // Show the tap instantly; the server applies it atomically.
+    patchSpeaker(speaker.id, { [key]: next });
+    void runMutation(() => bumpCount(speaker.id, field, delta));
   }
 
-  function bump(id: string, field: "filler" | "wod", delta: number) {
-    setSpeakers((prev) =>
-      prev.map((s) =>
-        s.id === id ? { ...s, [field]: Math.max(0, s[field] + delta) } : s
-      )
+  if (!configured) {
+    return (
+      <>
+        <Header />
+        <main className="flex flex-1 items-center justify-center p-8 text-center">
+          <p className="max-w-[500px] text-brand-dark-3">
+            The app isn&rsquo;t connected to its database yet. Add the Supabase environment
+            variables in your deployment settings, then redeploy.
+          </p>
+        </main>
+      </>
+    );
+  }
+
+  if (!ready || !meeting) {
+    return (
+      <>
+        <Header />
+        <main className="flex flex-1 items-center justify-center p-8">
+          <p className="text-brand-dark-3">Loading meeting...</p>
+        </main>
+      </>
     );
   }
 
   return (
     <>
       <Header />
+      <MeetingBar clubName={meeting.club_name} code={meeting.code} />
       <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col items-center gap-10 px-6 py-16">
         <div className="flex max-w-[644px] flex-col gap-1 text-center">
           <h1 className="text-[32px] font-extrabold leading-tight sm:text-[42px]">
@@ -96,56 +59,16 @@ export default function AhCounterPage() {
           </p>
         </div>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-[21px] font-semibold">Toastmaster&rsquo;s Name</label>
-              <input
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setError(null);
-                }}
-                placeholder="Example: Lord Doni ..."
-                className="h-[50px] w-[280px] rounded-lg border border-black/25 px-4 text-[18px] outline-none focus:border-brand-blue"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-[21px] font-semibold">Role</label>
-              <div className="relative">
-                <select
-                  value={role}
-                  onChange={(e) => {
-                    setRole(e.target.value);
-                    setError(null);
-                  }}
-                  className="h-[50px] w-[220px] appearance-none rounded-lg border border-black/25 py-0 pl-4 pr-10 text-[18px] text-brand-dark-1/70 outline-none focus:border-brand-blue"
-                >
-                  <option value="">Choose Role</option>
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={18}
-                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-brand-dark-1/70"
-                />
-              </div>
-            </div>
-            <button
-              onClick={addSpeaker}
-              className="flex h-[50px] items-center gap-2 rounded-lg brand-gradient px-5 text-[13px] font-semibold text-white"
-            >
-              <UserPlus size={18} /> Add Speaker
-            </button>
-          </div>
-          {error && <p className="text-[15px] font-medium text-[#f94444]">{error}</p>}
-        </div>
-
         {speakers.length === 0 ? (
-          <p className="text-brand-dark-3">No speakers added yet.</p>
+          <div className="flex max-w-[480px] flex-col items-center gap-2 text-center">
+            <p className="text-[18px] font-semibold text-brand-dark-1">
+              Waiting for the Timer to add the speakers...
+            </p>
+            <p className="text-[15px] text-brand-dark-3">
+              Names appear here automatically as soon as they&rsquo;re added &mdash; no need to
+              type them again.
+            </p>
+          </div>
         ) : (
           <div className="grid w-full grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-3">
             {speakers.map((s) => (
@@ -160,15 +83,15 @@ export default function AhCounterPage() {
                 <div className="flex w-full flex-col gap-4 px-5">
                   <CounterRow
                     label="Filler"
-                    value={s.filler}
-                    onMinus={() => bump(s.id, "filler", -1)}
-                    onPlus={() => bump(s.id, "filler", 1)}
+                    value={s.filler_count}
+                    onMinus={() => bump(s, "filler", -1)}
+                    onPlus={() => bump(s, "filler", 1)}
                   />
                   <CounterRow
                     label="WoD"
-                    value={s.wod}
-                    onMinus={() => bump(s.id, "wod", -1)}
-                    onPlus={() => bump(s.id, "wod", 1)}
+                    value={s.wod_count}
+                    onMinus={() => bump(s, "wod", -1)}
+                    onPlus={() => bump(s, "wod", 1)}
                   />
                 </div>
               </div>

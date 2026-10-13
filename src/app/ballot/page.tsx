@@ -1,36 +1,25 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { Trophy, Copy, Check, X, Award, Plus, UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Trophy, Copy, Check, Award, UserRound, Vote as VoteIcon, Pause } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
 import Header from "@/components/Header";
+import MeetingBar from "@/components/MeetingBar";
+import { supabase } from "@/lib/supabase";
 import {
-  supabase,
-  isSupabaseConfigured,
-  CATEGORIES,
-  randomCode,
-  type Category,
-  type BallotSession,
-  type BallotSpeaker,
-  type BallotVote,
-} from "@/lib/supabase";
+  BALLOT_CATEGORIES,
+  fetchVotes,
+  formatMeetingDate,
+  roleDef,
+  setVotingOpen,
+  votableCategory,
+  type BallotCategory,
+  type Vote,
+} from "@/lib/meeting";
+import { useRequireMeeting } from "@/lib/use-meeting";
 
-type Stage = "setup" | "qr" | "results";
-type NameLists = Record<Category, string[]>;
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function formatDate(iso: string) {
-  if (!iso) return "";
-  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
+type View = "main" | "results";
 
 // A short two-sided confetti burst, fired whenever a winner certificate opens.
 function fireConfetti() {
@@ -42,146 +31,95 @@ function fireConfetti() {
   })();
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-2 text-left">
-      <label className="text-[16px] font-semibold text-brand-dark-1">{label}</label>
-      {children}
-    </div>
-  );
-}
+export default function BallotPage() {
+  const { meeting, speakers, ready, configured, runMutation } = useRequireMeeting("/ballot");
+  const meetingId = meeting?.id ?? null;
 
-const inputClass =
-  "h-[50px] w-full rounded-lg border border-black/25 px-4 text-[16px] outline-none focus:border-brand-blue";
-
-export default function BallotAdminPage() {
-  const [stage, setStage] = useState<Stage>("setup");
-  const [session, setSession] = useState<BallotSession | null>(null);
-  const [speakers, setSpeakers] = useState<BallotSpeaker[]>([]);
-  const [votes, setVotes] = useState<BallotVote[]>([]);
-
-  const [clubName, setClubName] = useState("");
-  const [room, setRoom] = useState("");
-  const [eventDate, setEventDate] = useState(todayISO());
-  const [names, setNames] = useState<NameLists>({
-    "Prepared Speech": [],
-    "Evaluation Speech": [],
-    "Table Topic": [],
-  });
-  const [draftName, setDraftName] = useState<Record<Category, string>>({
-    "Prepared Speech": "",
-    "Evaluation Speech": "",
-    "Table Topic": "",
-  });
-  const [creating, setCreating] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
+  const [view, setView] = useState<View>("main");
+  const [votes, setVotes] = useState<Vote[]>([]);
   const [copied, setCopied] = useState(false);
-  const [revealed, setRevealed] = useState<Record<Category, boolean>>({
+  const [revealed, setRevealed] = useState<Record<BallotCategory, boolean>>({
     "Prepared Speech": false,
     "Evaluation Speech": false,
     "Table Topic": false,
   });
-  const [certificate, setCertificate] = useState<Category | null>(null);
+  const [certificate, setCertificate] = useState<BallotCategory | null>(null);
 
-  const voteUrl =
-    session && typeof window !== "undefined"
-      ? `${window.location.origin}/ballot/vote/${session.code}`
-      : "";
-
-  // Votes are tallied quietly in the background so winners can be revealed
-  // on demand — nothing here is rendered until a Reveal button is clicked.
+  // Votes are tallied quietly in the background so winners can be revealed on
+  // demand — only the per-category headcount is shown while voting is open.
   useEffect(() => {
-    if (!session) return;
-    supabase
-      .from("ballot_votes")
-      .select("*")
-      .eq("session_id", session.id)
-      .then(({ data }) => setVotes((data as BallotVote[]) ?? []));
-
+    if (!meetingId) return;
+    let cancelled = false;
+    const load = async () => {
+      const latest = await fetchVotes(meetingId);
+      if (!cancelled) setVotes(latest);
+    };
+    void load();
+    const timer = setInterval(() => void load(), 4000);
     const channel = supabase
-      .channel(`votes-${session.id}`)
+      .channel(`votes-${meetingId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "ballot_votes", filter: `session_id=eq.${session.id}` },
-        (payload) => setVotes((prev) => [...prev, payload.new as BallotVote])
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "meeting_votes",
+          filter: `meeting_id=eq.${meetingId}`,
+        },
+        () => void load()
       )
       .subscribe();
-
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      clearInterval(timer);
+      void supabase.removeChannel(channel);
     };
-  }, [session]);
+  }, [meetingId]);
 
-  function addName(category: Category) {
-    const value = draftName[category].trim();
-    if (!value) return;
-    setNames((prev) => ({ ...prev, [category]: [...prev[category], value] }));
-    setDraftName((prev) => ({ ...prev, [category]: "" }));
-    setFormError(null);
-  }
+  // Every time a certificate opens (first reveal or reopening one already
+  // revealed), celebrate with a short confetti burst.
+  useEffect(() => {
+    if (certificate) fireConfetti();
+  }, [certificate]);
 
-  function removeName(category: Category, index: number) {
-    setNames((prev) => ({
-      ...prev,
-      [category]: prev[category].filter((_, i) => i !== index),
-    }));
-  }
-
-  async function handleGenerate() {
-    if (!clubName.trim() || !room.trim() || !eventDate) {
-      setFormError("Please fill in the club name, room, and date.");
-      return;
-    }
-    const emptyCategory = CATEGORIES.find((c) => names[c].length === 0);
-    if (emptyCategory) {
-      setFormError(`Please add at least one name for ${emptyCategory}.`);
-      return;
-    }
-
-    setCreating(true);
-    setFormError(null);
-    const code = randomCode();
-    const { data, error } = await supabase
-      .from("ballot_sessions")
-      .insert({ code, club_name: clubName.trim(), room: room.trim(), event_date: eventDate })
-      .select()
-      .single();
-
-    if (error) {
-      setCreating(false);
-      setFormError(`Could not create session: ${error.message}`);
-      return;
-    }
-
-    const newSession = data as BallotSession;
-    const rows = CATEGORIES.flatMap((category) =>
-      names[category].map((name) => ({ session_id: newSession.id, name, category }))
+  if (!configured) {
+    return (
+      <>
+        <Header />
+        <main className="flex flex-1 items-center justify-center p-8 text-center">
+          <p className="max-w-[500px] text-brand-dark-3">
+            The app isn&rsquo;t connected to its database yet. Add the Supabase environment
+            variables in your deployment settings, then redeploy.
+          </p>
+        </main>
+      </>
     );
-    const { data: speakerRows, error: speakerError } = await supabase
-      .from("ballot_speakers")
-      .insert(rows)
-      .select();
-
-    setCreating(false);
-    if (speakerError) {
-      setFormError(`Could not add speakers: ${speakerError.message}`);
-      return;
-    }
-
-    setSession(newSession);
-    setSpeakers((speakerRows as BallotSpeaker[]) ?? []);
-    setStage("qr");
   }
 
-  function copyLink() {
-    navigator.clipboard.writeText(voteUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  if (!ready || !meeting) {
+    return (
+      <>
+        <Header />
+        <main className="flex flex-1 items-center justify-center p-8">
+          <p className="text-brand-dark-3">Loading meeting...</p>
+        </main>
+      </>
+    );
   }
 
-  function winnerFor(category: Category) {
-    const list = speakers.filter((s) => s.category === category);
+  const voteUrl =
+    typeof window !== "undefined" ? `${window.location.origin}/vote/${meeting.code}` : "";
+  const dateLabel = formatMeetingDate(meeting.created_at);
+
+  const candidates = (category: BallotCategory) =>
+    speakers.filter((s) => votableCategory(s) === category);
+  const overTime = speakers.filter((s) => !s.eligible && roleDef(s.role)?.ballotCategory);
+  const hasCandidates = BALLOT_CATEGORIES.some((c) => candidates(c).length > 0);
+  const votesFor = (category: BallotCategory) =>
+    votes.filter((v) => v.category === category).length;
+
+  function winnerFor(category: BallotCategory) {
+    const list = candidates(category);
     if (list.length === 0) {
       return { status: "no-speakers" as const, names: [] as string[] };
     }
@@ -194,179 +132,50 @@ export default function BallotAdminPage() {
       return { status: "no-votes" as const, names: [] as string[] };
     }
     // A single top scorer is the automatic winner; a tie lists every name.
-    const winners = tally.filter((t) => t.count === top).map((t) => t.name);
-    return { status: "decided" as const, names: winners };
+    return {
+      status: "decided" as const,
+      names: tally.filter((t) => t.count === top).map((t) => t.name),
+    };
   }
 
-  function votesFor(category: Category) {
-    return votes.filter((v) => v.category === category).length;
+  function copyLink() {
+    navigator.clipboard.writeText(voteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
-  // Every time a certificate opens (first reveal or reopening one already
-  // revealed), celebrate with a short confetti burst.
-  useEffect(() => {
-    if (certificate) fireConfetti();
-  }, [certificate]);
+  async function startVoting() {
+    if (!meeting) return;
+    await runMutation(() => setVotingOpen(meeting.id, true));
+    setView("main");
+  }
 
-  if (!isSupabaseConfigured) {
+  async function stopVoting() {
+    if (!meeting) return;
+    await runMutation(() => setVotingOpen(meeting.id, false));
+  }
+
+  async function revealWinners() {
+    if (!meeting) return;
+    await runMutation(() => setVotingOpen(meeting.id, false));
+    setView("results");
+  }
+
+  // ---- Voting is open: full-screen QR for everyone to scan -----------------
+  if (view === "main" && meeting.voting_open) {
     return (
       <>
         <Header />
-        <main className="flex flex-1 items-center justify-center p-8 text-center">
-          <p className="max-w-[500px] text-brand-dark-3">
-            Ballot Counter isn&rsquo;t connected to a database yet. Add the
-            Supabase environment variables in your deployment settings, then
-            redeploy, to enable voting.
-          </p>
-        </main>
-      </>
-    );
-  }
-
-  if (stage === "setup") {
-    return (
-      <>
-        <Header />
-        <main className="mx-auto flex w-full max-w-[1000px] flex-1 flex-col items-center gap-10 px-6 py-16">
-          <div className="flex max-w-[620px] flex-col items-center gap-1 text-center">
-            <h1 className="text-[32px] font-extrabold leading-tight sm:text-[42px]">
-              Ballot Counter
-            </h1>
-            <p className="text-[18px] leading-[1.4]">
-              Set up today&rsquo;s meeting and list the speakers eligible to vote in
-              each category, then generate the voting QR code.
-            </p>
-          </div>
-
-          <div className="flex w-full max-w-[720px] flex-col gap-4">
-            <Field label="Toastmasters Club Name">
-              <input
-                value={clubName}
-                onChange={(e) => {
-                  setClubName(e.target.value);
-                  setFormError(null);
-                }}
-                placeholder="Example: Berlian Toastmasters"
-                className={inputClass}
-              />
-            </Field>
-            <div className="grid w-full gap-4 sm:grid-cols-2">
-              <Field label="Room / Location">
-                <input
-                  value={room}
-                  onChange={(e) => {
-                    setRoom(e.target.value);
-                    setFormError(null);
-                  }}
-                  placeholder="Example: Mitsubishi Building 4th Floor"
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Date">
-                <input
-                  type="date"
-                  value={eventDate}
-                  onChange={(e) => {
-                    setEventDate(e.target.value);
-                    setFormError(null);
-                  }}
-                  className={inputClass}
-                />
-              </Field>
-            </div>
-          </div>
-
-          <div className="grid w-full gap-6 sm:grid-cols-3">
-            {CATEGORIES.map((category) => (
-              <div
-                key={category}
-                className="flex flex-col gap-3 rounded-lg border border-brand-blue p-5"
-              >
-                <p className="text-[18px] font-semibold text-brand-dark-1">{category}</p>
-                <div className="flex gap-2">
-                  <input
-                    value={draftName[category]}
-                    onChange={(e) =>
-                      setDraftName((prev) => ({ ...prev, [category]: e.target.value }))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addName(category);
-                      }
-                    }}
-                    placeholder="Example: Lord Doni ..."
-                    className="h-[44px] flex-1 rounded-lg border border-black/25 px-3 text-[15px] outline-none focus:border-brand-blue"
-                  />
-                  <button
-                    onClick={() => addName(category)}
-                    aria-label={`Add name to ${category}`}
-                    className="flex size-[44px] shrink-0 items-center justify-center rounded-lg brand-gradient text-white"
-                  >
-                    <Plus size={18} />
-                  </button>
-                </div>
-                {names[category].length === 0 ? (
-                  <p className="text-[14px] text-brand-dark-3">No names added yet.</p>
-                ) : (
-                  <ul className="flex flex-col gap-1.5">
-                    {names[category].map((name, i) => (
-                      <li
-                        key={`${name}-${i}`}
-                        className="flex items-center justify-between rounded-lg bg-brand-blue/5 px-3 py-2 text-[14px]"
-                      >
-                        <span>{name}</span>
-                        <button
-                          onClick={() => removeName(category, i)}
-                          aria-label={`Remove ${name}`}
-                          className="text-brand-dark-3 hover:text-brand-dark-1"
-                        >
-                          <X size={14} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {formError && <p className="text-[15px] font-medium text-[#f94444]">{formError}</p>}
-
-          <button
-            onClick={handleGenerate}
-            disabled={creating}
-            className="rounded-lg brand-gradient px-8 py-4 text-[16px] font-semibold text-white disabled:opacity-50"
-          >
-            {creating ? "Generating..." : "Generate QR Code"}
-          </button>
-        </main>
-      </>
-    );
-  }
-
-  if (stage === "qr") {
-    return (
-      <>
-        <Header />
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 brand-gradient p-8 text-center text-white">
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 overflow-y-auto brand-gradient p-8 text-center text-white">
           <div className="flex flex-col items-center gap-1">
             <p className="text-[16px] font-semibold uppercase tracking-wide opacity-80">
-              {clubName}
+              {meeting.club_name}
             </p>
-            <p className="text-[14px] opacity-70">
-              {room} &middot; {formatDate(eventDate)}
-            </p>
+            <p className="text-[14px] opacity-70">{dateLabel}</p>
           </div>
           <h1 className="text-[32px] font-extrabold sm:text-[42px]">Scan to Vote</h1>
           <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-8 text-brand-dark-1">
-            <p className="text-[14px] uppercase tracking-wide text-brand-dark-3">
-              Members join with this code
-            </p>
-            <p className="text-[42px] font-semibold tracking-widest text-brand-blue">
-              {session?.code}
-            </p>
-            <QRCodeSVG value={voteUrl} size={180} />
+            <QRCodeSVG value={voteUrl} size={200} />
             <button
               onClick={copyLink}
               className="flex items-center gap-2 text-[14px] font-semibold text-brand-dark-2"
@@ -380,125 +189,219 @@ export default function BallotAdminPage() {
             <p className="text-[13px] font-semibold uppercase tracking-wide opacity-80">
               People Voted
             </p>
-            {CATEGORIES.map((category) => (
+            {BALLOT_CATEGORIES.map((category) => (
               <p key={category} className="text-[15px] font-medium">
                 {category} ({votesFor(category)})
               </p>
             ))}
           </div>
 
-          <button
-            onClick={() => setStage("results")}
-            className="flex items-center gap-2 rounded-lg bg-white px-8 py-4 text-[16px] font-semibold text-brand-blue"
-          >
-            <Trophy size={20} />
-            Reveal Winners
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={revealWinners}
+              className="flex items-center gap-2 rounded-lg bg-white px-8 py-4 text-[16px] font-semibold text-brand-blue"
+            >
+              <Trophy size={20} />
+              Reveal Winners
+            </button>
+            <button
+              onClick={stopVoting}
+              className="flex items-center gap-2 rounded-lg border border-white/60 px-6 py-4 text-[16px] font-semibold text-white"
+            >
+              <Pause size={18} />
+              Pause Voting
+            </button>
+          </div>
         </div>
       </>
     );
   }
 
+  // ---- Results: reveal each category's winner -------------------------------
+  if (view === "results") {
+    return (
+      <>
+        <Header />
+        <MeetingBar clubName={meeting.club_name} code={meeting.code} />
+        <main className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col items-center gap-10 px-6 py-16">
+          <div className="flex flex-col items-center gap-1 text-center">
+            <h1 className="text-[32px] font-extrabold leading-tight sm:text-[42px]">
+              Reveal the Winners
+            </h1>
+            <p className="text-[18px] leading-[1.4] text-brand-dark-3">
+              {meeting.club_name} &middot; {dateLabel}
+            </p>
+          </div>
+
+          <div className="grid w-full gap-8 sm:grid-cols-3">
+            {BALLOT_CATEGORIES.map((category) => (
+              <div
+                key={category}
+                className="flex flex-col items-center gap-5 rounded-2xl border border-brand-blue p-8 text-center"
+              >
+                <Trophy className="text-brand-blue" size={40} strokeWidth={1.5} />
+                <p className="text-[21px] font-extrabold text-brand-dark-1">{category}</p>
+                <button
+                  onClick={() => setCertificate(category)}
+                  className="flex items-center gap-2 rounded-lg brand-gradient px-6 py-3.5 text-[15px] font-semibold text-white"
+                >
+                  {revealed[category] ? (
+                    <>
+                      <Award size={16} /> View Certificate
+                    </>
+                  ) : (
+                    "Reveal Winner"
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={startVoting}
+            className="text-[15px] font-semibold text-brand-blue"
+          >
+            Reopen voting
+          </button>
+        </main>
+
+        {certificate && (
+          <div
+            className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-between gap-10 overflow-y-auto px-10 py-10 text-white brand-gradient sm:flex-row sm:px-[20vw] sm:py-16"
+            onClick={() => {
+              setRevealed((prev) => ({ ...prev, [certificate]: true }));
+              setCertificate(null);
+            }}
+          >
+            <div className="flex w-full flex-1 flex-col items-start gap-6 text-left">
+              <Award size={56} />
+              <p className="text-[28px] font-semibold sm:text-[36px]">Congratulations!</p>
+              <p className="rounded-lg border border-white px-4 py-2 text-[20px] font-medium uppercase opacity-90">
+                You&rsquo;re the Best {certificate}
+              </p>
+              {(() => {
+                const result = winnerFor(certificate);
+                if (result.status === "no-speakers") {
+                  return (
+                    <p className="text-[28px] font-semibold sm:text-[36px]">No speakers added</p>
+                  );
+                }
+                if (result.status === "no-votes") {
+                  return (
+                    <p className="text-[28px] font-semibold sm:text-[36px]">No votes were cast</p>
+                  );
+                }
+                return (
+                  <div className="flex flex-col items-start gap-1">
+                    {result.names.map((n) => (
+                      <p
+                        key={n}
+                        className="text-[40px] font-extrabold leading-tight sm:text-[56px]"
+                      >
+                        {n}
+                      </p>
+                    ))}
+                  </div>
+                );
+              })()}
+              <p className="text-[16px] leading-[1.5] text-white opacity-100">
+                Keep practicing, keep growing,
+                <br />
+                and keep inspiring others with your voice.
+              </p>
+              <div className="mt-4 flex flex-col items-start gap-1">
+                <p className="text-[16px] font-semibold opacity-90">{meeting.club_name}</p>
+                <p className="text-[14px] opacity-70">{dateLabel}</p>
+              </div>
+            </div>
+
+            {/* Photo-op backdrop: point the winner here for the on-stage photo. */}
+            <div className="flex shrink-0 items-center justify-center rounded-[40px] bg-white/10 p-6 opacity-40 sm:p-10">
+              <UserRound
+                size={180}
+                fill="currentColor"
+                stroke="none"
+                className="text-white sm:size-[240px]"
+              />
+            </div>
+
+            <span className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/40">
+              Tap anywhere to close
+            </span>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // ---- Ready: review candidates, then start voting --------------------------
   return (
     <>
       <Header />
-      <main className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col items-center gap-10 px-6 py-16">
-        <div className="flex flex-col items-center gap-1 text-center">
+      <MeetingBar clubName={meeting.club_name} code={meeting.code} />
+      <main className="mx-auto flex w-full max-w-[1000px] flex-1 flex-col items-center gap-10 px-6 py-16">
+        <div className="flex max-w-[620px] flex-col items-center gap-1 text-center">
           <h1 className="text-[32px] font-extrabold leading-tight sm:text-[42px]">
-            Reveal the Winners
+            Ballot Counter
           </h1>
-          <p className="text-[18px] leading-[1.4] text-brand-dark-3">
-            {clubName} &middot; {room} &middot; {formatDate(eventDate)}
+          <p className="text-[18px] leading-[1.4]">
+            When the speeches are done, start voting. Everyone scans a QR code and votes on
+            their own phone &mdash; the candidates below come from the Timer&rsquo;s list.
           </p>
         </div>
 
-        <div className="grid w-full gap-8 sm:grid-cols-3">
-          {CATEGORIES.map((category) => (
-            <div
-              key={category}
-              className="flex flex-col items-center gap-5 rounded-2xl border border-brand-blue p-8 text-center"
-            >
-              <Trophy className="text-brand-blue" size={40} strokeWidth={1.5} />
-              <p className="text-[21px] font-semibold text-brand-dark-1">{category}</p>
-              <button
-                onClick={() => setCertificate(category)}
-                className="flex items-center gap-2 rounded-lg brand-gradient px-6 py-3.5 text-[15px] font-semibold text-white"
+        <div className="grid w-full gap-6 sm:grid-cols-3">
+          {BALLOT_CATEGORIES.map((category) => {
+            const list = candidates(category);
+            return (
+              <div
+                key={category}
+                className="flex flex-col gap-3 rounded-lg border border-brand-blue p-5"
               >
-                {revealed[category] ? (
-                  <>
-                    <Award size={16} /> View Certificate
-                  </>
+                <p className="text-[18px] font-extrabold text-brand-dark-1">{category}</p>
+                {list.length === 0 ? (
+                  <p className="text-[14px] text-brand-dark-3">
+                    No candidates yet &mdash; the Timer adds speakers.
+                  </p>
                 ) : (
-                  "Reveal Winner"
+                  <ul className="flex flex-col gap-1.5">
+                    {list.map((s) => (
+                      <li key={s.id} className="rounded-lg bg-brand-blue/5 px-3 py-2 text-[14px]">
+                        {s.name}
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </button>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
-      </main>
 
-      {certificate && (
-        <div
-          className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-between gap-10 overflow-y-auto px-10 py-10 text-white brand-gradient sm:flex-row sm:px-[20vw] sm:py-16"
-          onClick={() => {
-            setRevealed((prev) => ({ ...prev, [certificate]: true }));
-            setCertificate(null);
-          }}
+        {overTime.length > 0 && (
+          <p className="max-w-[620px] text-center text-[14px] text-brand-dark-3">
+            Not eligible (went over time):{" "}
+            {overTime.map((s) => s.name).join(", ")}
+          </p>
+        )}
+
+        <button
+          onClick={startVoting}
+          disabled={!hasCandidates}
+          className="flex items-center gap-2 rounded-lg brand-gradient px-8 py-4 text-[16px] font-semibold text-white disabled:opacity-50"
         >
-          <div className="flex w-full flex-1 flex-col items-start gap-6 text-left">
-            <Award size={56} />
-            <p className="text-[28px] font-semibold sm:text-[36px]">Congratulations!</p>
-            <p className="rounded-lg border border-white px-4 py-2 text-[20px] font-medium uppercase opacity-90">
-              You&rsquo;re the Best {certificate}
-            </p>
-            {(() => {
-              const result = winnerFor(certificate);
-              if (result.status === "no-speakers") {
-                return (
-                  <p className="text-[28px] font-semibold sm:text-[36px]">No speakers added</p>
-                );
-              }
-              if (result.status === "no-votes") {
-                return (
-                  <p className="text-[28px] font-semibold sm:text-[36px]">No votes were cast</p>
-                );
-              }
-              return (
-                <div className="flex flex-col items-start gap-1">
-                  {result.names.map((n) => (
-                    <p
-                      key={n}
-                      className="text-[40px] font-extrabold leading-tight sm:text-[56px]"
-                    >
-                      {n}
-                    </p>
-                  ))}
-                </div>
-              );
-            })()}
-            <p className="text-[16px] leading-[1.5] text-white opacity-100">
-              Keep practicing, keep growing,
-              <br />
-              and keep inspiring others with your voice.
-            </p>
-            <div className="mt-4 flex flex-col items-start gap-1">
-              <p className="text-[16px] font-semibold opacity-90">{clubName}</p>
-              <p className="text-[14px] opacity-70">
-                {room} | {formatDate(eventDate)}
-              </p>
-            </div>
-          </div>
+          <VoteIcon size={20} />
+          Start Voting
+        </button>
 
-          {/* Photo-op backdrop: point the winner here for the on-stage photo. */}
-          <div className="flex shrink-0 items-center justify-center rounded-[40px] bg-white/10 p-6 opacity-40 sm:p-10">
-            <UserRound size={180} fill="currentColor" stroke="none" className="text-white sm:size-[240px]" />
-          </div>
-
-          <span className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/40">
-            Tap anywhere to close
-          </span>
-        </div>
-      )}
+        {votes.length > 0 && (
+          <button
+            onClick={revealWinners}
+            className="flex items-center gap-2 text-[15px] font-semibold text-brand-blue"
+          >
+            <Trophy size={16} /> Reveal winners from votes so far
+          </button>
+        )}
+      </main>
     </>
   );
 }
