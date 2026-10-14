@@ -42,7 +42,7 @@ export type Vote = {
 // Roles & voting categories
 // ---------------------------------------------------------------------------
 
-export const BALLOT_CATEGORIES = ["Prepared Speech", "Evaluation Speech"] as const;
+export const BALLOT_CATEGORIES = ["Prepared Speech", "Evaluation Speech", "Table Topic"] as const;
 export type BallotCategory = (typeof BALLOT_CATEGORIES)[number];
 
 export type RoleDef = {
@@ -55,16 +55,14 @@ export type RoleDef = {
   ballotCategory?: BallotCategory;
 };
 
-// The Timer picks one of these for every name it adds. Ah & WoD Counter can
-// count all of them; the Ballot only uses the ones with a ballotCategory.
+// The Timer picks one of these for every name it adds. Every role is timed;
+// the Ah & WoD Counter can count all of them, and the Ballot only uses the
+// ones with a ballotCategory.
 export const SPEAKER_ROLES: RoleDef[] = [
   { label: "Prepared Speaker", max: 5, timerCategoryId: "prepared", ballotCategory: "Prepared Speech" },
   { label: "Evaluator", max: 5, timerCategoryId: "evaluation", ballotCategory: "Evaluation Speech" },
+  { label: "Table Topic Speaker", max: 10, timerCategoryId: "tabletopic", ballotCategory: "Table Topic" },
   { label: "General Evaluator", max: 1, timerCategoryId: "general" },
-  { label: "TOM", max: 1 },
-  { label: "Grammarian", max: 1 },
-  { label: "Ah & WoD Counter", max: 1 },
-  { label: "Timer", max: 1 },
 ];
 
 export function roleDef(label: string): RoleDef | undefined {

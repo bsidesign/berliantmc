@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Play, Square, Trash2, X, ChevronDown, Plus, UserRound } from "lucide-react";
 import Header from "@/components/Header";
 import MeetingBar from "@/components/MeetingBar";
@@ -45,6 +45,37 @@ const ZONE_NOTES: Record<Zone, string> = {
 
 const fieldClass =
   "h-[50px] rounded-lg border border-black/25 px-4 text-[16px] outline-none focus:border-brand-blue";
+
+/**
+ * Big clock text that always fills 80% of the screen width, so the speaker can
+ * read it from across the room. It measures itself (digits are tabular, so the
+ * width only changes when a minus sign appears) and sets the font size directly.
+ */
+function FitTime({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    function fit() {
+      if (!el) return;
+      el.style.fontSize = "100px";
+      const natural = el.getBoundingClientRect().width;
+      if (!natural) return;
+      const target = document.documentElement.clientWidth * 0.8;
+      el.style.fontSize = `${(100 * target) / natural}px`;
+    }
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [text.length]);
+
+  return (
+    <span ref={ref} className="inline-block whitespace-nowrap font-semibold leading-none tabular-nums">
+      {text}
+    </span>
+  );
+}
 
 function categoryForRole(role: string): TimerCategory | undefined {
   const id = roleDef(role)?.timerCategoryId;
@@ -96,11 +127,16 @@ export default function TimerPage() {
   const elapsed = category.red - shownRemaining;
   const progressPct = Math.min(100, Math.max(0, (elapsed / category.red) * 100));
 
+  // A speaker who already has a recorded time can't be started again until
+  // that time is cleared (trash icon in the table).
+  const alreadyTimed = selected !== null && selected.speech_seconds !== null;
+
   function handleStart() {
     if (!selected) {
       setStartError("Choose who is speaking first.");
       return;
     }
+    if (alreadyTimed) return;
     setStartError(null);
     setRemaining(category.red);
     setMode("running");
@@ -393,11 +429,18 @@ export default function TimerPage() {
             </div>
             <button
               onClick={handleStart}
-              className="flex items-center gap-2 rounded-lg bg-[#14c801] px-6 py-3.5 text-[16px] font-semibold text-white"
+              disabled={alreadyTimed}
+              className="flex items-center gap-2 rounded-lg bg-[#14c801] px-6 py-3.5 text-[16px] font-semibold text-white disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-black/40"
             >
               <Play size={18} />
               Start
             </button>
+            {alreadyTimed && (
+              <p className="max-w-[320px] text-center text-[14px] text-brand-dark-3">
+                {selected?.name} has already been timed. Clear their time in the table to time
+                them again.
+              </p>
+            )}
             {startError && (
               <p className="text-[14px] font-medium text-[#f94444]">{startError}</p>
             )}
@@ -423,9 +466,7 @@ export default function TimerPage() {
             {selected ? `${selected.name} · ` : ""}
             {category.label}
           </p>
-          <p className="text-[120px] font-semibold leading-none tabular-nums sm:text-[220px]">
-            {formatTime(mode === "saving" ? finalElapsed : remaining)}
-          </p>
+          <FitTime text={formatTime(mode === "saving" ? finalElapsed : remaining)} />
 
           {mode === "running" && (
             <button
