@@ -196,10 +196,10 @@ export default function HomePage() {
       <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col items-center gap-10 px-6 py-16">
         <div className="flex max-w-[589px] flex-col items-center gap-2 text-center">
           <p className="text-[16px] font-semibold uppercase tracking-wide text-brand-blue">
-            {meeting?.club_name ?? "Loading meeting..."}
+            Choose Your Role
           </p>
           <h1 className="text-[32px] font-extrabold leading-tight sm:text-[42px]">
-            Choose Your Role
+            {meeting?.club_name ?? "Loading meeting..."}
           </h1>
           <p className="text-[18px] leading-[1.4] text-brand-dark-1">
             Select your role to open the tools you need for today&rsquo;s Toastmasters meeting.
@@ -210,7 +210,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="flex w-full max-w-[832px] flex-wrap justify-center gap-8">
+        <div className="flex w-full max-w-[480px] flex-col items-center gap-6">
           {TOOLS.map((tool) => (
             <RoleCard key={tool.href} {...tool} />
           ))}

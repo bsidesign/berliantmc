@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Play, Square, Trash2, X, ChevronDown, Plus, Check, UserRound } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Play, Square, Trash2, X, ChevronDown, Plus, UserRound } from "lucide-react";
 import Header from "@/components/Header";
 import MeetingBar from "@/components/MeetingBar";
 import { TIMER_CATEGORIES, type TimerCategory, formatTime } from "@/lib/timer-categories";
@@ -46,16 +46,15 @@ const ZONE_NOTES: Record<Zone, string> = {
 const fieldClass =
   "h-[50px] rounded-lg border border-black/25 px-4 text-[16px] outline-none focus:border-brand-blue";
 
+function categoryForRole(role: string): TimerCategory | undefined {
+  const id = roleDef(role)?.timerCategoryId;
+  return id ? TIMER_CATEGORIES.find((c) => c.id === id) : undefined;
+}
+
 export default function TimerPage() {
   const { meeting, speakers, ready, configured, runMutation } = useRequireMeeting("/timer");
 
-  const [categoryId, setCategoryId] = useState(TIMER_CATEGORIES[0].id);
-  const category = useMemo(
-    () => TIMER_CATEGORIES.find((c) => c.id === categoryId)!,
-    [categoryId]
-  );
-
-  const [remaining, setRemaining] = useState(category.red);
+  const [remaining, setRemaining] = useState(0);
   const [mode, setMode] = useState<Mode>("idle");
   const [finalElapsed, setFinalElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -69,21 +68,14 @@ export default function TimerPage() {
   const [startError, setStartError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
 
-  function selectCategory(next: TimerCategory) {
-    setCategoryId(next.id);
-    setMode("idle");
-    setRemaining(next.red);
-  }
+  const selected = speakers.find((s) => s.id === selectedId) ?? null;
+  // The timing rules come from the chosen speaker's role: no tabs to pick.
+  const category = (selected && categoryForRole(selected.role)) || TIMER_CATEGORIES[0];
 
   function selectSpeaker(id: string) {
     if (mode !== "idle") return;
     setSelectedId(id);
     setStartError(null);
-    // Each role has its own timing rules, so switch the lights automatically.
-    const speaker = speakers.find((s) => s.id === id);
-    const wanted = speaker ? roleDef(speaker.role)?.timerCategoryId : undefined;
-    const next = wanted ? TIMER_CATEGORIES.find((c) => c.id === wanted) : undefined;
-    if (next) selectCategory(next);
   }
 
   useEffect(() => {
@@ -99,10 +91,10 @@ export default function TimerPage() {
     };
   }, [mode]);
 
-  const elapsed = category.red - remaining;
-  const zone = zoneFor(elapsed, category);
+  // While idle the clock always shows the full time for the chosen speaker.
+  const shownRemaining = mode === "idle" ? category.red : remaining;
+  const elapsed = category.red - shownRemaining;
   const progressPct = Math.min(100, Math.max(0, (elapsed / category.red) * 100));
-  const selected = speakers.find((s) => s.id === selectedId) ?? null;
 
   function handleStart() {
     if (!selected) {
@@ -110,6 +102,7 @@ export default function TimerPage() {
       return;
     }
     setStartError(null);
+    setRemaining(category.red);
     setMode("running");
   }
 
@@ -121,18 +114,18 @@ export default function TimerPage() {
 
   function handleReset() {
     setMode("idle");
-    setRemaining(category.red);
   }
 
   async function handleSaveTime() {
     const target = speakers.find((s) => s.id === saveForId);
     if (!target) return;
-    const finalZone = zoneFor(finalElapsed, category);
+    const targetCategory = categoryForRole(target.role) ?? category;
+    const finalZone = zoneFor(finalElapsed, targetCategory);
     await runMutation(() =>
       saveTiming(
         target.id,
         finalElapsed,
-        category.id,
+        targetCategory.id,
         ZONE_NOTES[finalZone],
         finalZone !== "black"
       )
@@ -176,8 +169,9 @@ export default function TimerPage() {
     }
   }
 
-  const timedRows = speakers.filter((s) => s.speech_seconds !== null);
+  const zone = zoneFor(elapsed, category);
   const confirmTarget = speakers.find((s) => s.id === confirm?.id) ?? null;
+  const timableSpeakers = speakers.filter((s) => categoryForRole(s.role));
 
   if (!configured) {
     return (
@@ -208,19 +202,19 @@ export default function TimerPage() {
     <>
       <Header />
       <MeetingBar clubName={meeting.club_name} code={meeting.code} />
-      <main className="flex flex-1 flex-col items-center">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col items-center gap-8 px-6 pt-16 pb-16">
-          <div className="flex max-w-[730px] flex-col gap-1 text-center">
-            <h1 className="text-[32px] font-extrabold leading-tight sm:text-[42px]">Timer</h1>
-            <p className="text-[18px] leading-[1.4]">
-              Add today&rsquo;s speakers once &mdash; every other role sees the list on their own
-              device. Then pick who is speaking, start the clock, and use the visual signals to
-              keep them on time.
-            </p>
-          </div>
+      <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col items-center gap-8 px-6 py-12">
+        <div className="flex max-w-[730px] flex-col gap-1 text-center">
+          <h1 className="text-[32px] font-extrabold leading-tight sm:text-[42px]">Timer</h1>
+          <p className="text-[18px] leading-[1.4]">
+            Add today&rsquo;s speakers once &mdash; every other role sees the list on their own
+            device. Select who is speaking, start the clock, and use the visual signals to keep
+            them on time.
+          </p>
+        </div>
 
-          {/* Shared speaker list */}
-          <div className="flex w-full max-w-[800px] flex-col gap-4 rounded-2xl border border-brand-dark-4 p-6">
+        <div className="grid w-full items-start gap-8 lg:grid-cols-2">
+          {/* Left: shared speaker list + times */}
+          <div className="flex min-w-0 flex-col gap-4 rounded-2xl border border-brand-dark-4 p-6">
             <div className="flex flex-col gap-1">
               <h2 className="text-[21px] font-extrabold">Speakers</h2>
               <p className="text-[14px] text-brand-dark-3">
@@ -228,7 +222,7 @@ export default function TimerPage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-col gap-3">
               <input
                 value={newName}
                 onChange={(e) => {
@@ -239,110 +233,139 @@ export default function TimerPage() {
                   if (e.key === "Enter") void handleAddSpeaker();
                 }}
                 placeholder="Example: Lord Doni ..."
-                className={`${fieldClass} flex-1`}
+                className={`${fieldClass} w-full`}
               />
-              <div className="relative sm:w-[220px]">
-                <select
-                  value={newRole}
-                  onChange={(e) => setNewRole(e.target.value)}
-                  className={`${fieldClass} w-full appearance-none pr-10 text-brand-dark-1`}
+              <div className="flex gap-3">
+                <div className="relative min-w-0 flex-1">
+                  <select
+                    value={newRole}
+                    onChange={(e) => setNewRole(e.target.value)}
+                    className={`${fieldClass} w-full appearance-none pr-10 text-brand-dark-1`}
+                  >
+                    {SPEAKER_ROLES.map((r) => (
+                      <option key={r.label} value={r.label}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={18}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-brand-dark-1"
+                  />
+                </div>
+                <button
+                  onClick={handleAddSpeaker}
+                  className="flex h-[50px] shrink-0 items-center justify-center gap-2 rounded-lg brand-gradient px-5 text-[14px] font-semibold text-white"
                 >
-                  {SPEAKER_ROLES.map((r) => (
-                    <option key={r.label} value={r.label}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={18}
-                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-brand-dark-1"
-                />
+                  <Plus size={18} /> Add
+                </button>
               </div>
-              <button
-                onClick={handleAddSpeaker}
-                className="flex h-[50px] items-center justify-center gap-2 rounded-lg brand-gradient px-5 text-[14px] font-semibold text-white"
-              >
-                <Plus size={18} /> Add
-              </button>
+              {formError && (
+                <p className="text-[14px] font-medium text-[#f94444]">{formError}</p>
+              )}
             </div>
-            {formError && <p className="text-[14px] font-medium text-[#f94444]">{formError}</p>}
 
-            {speakers.length === 0 ? (
-              <p className="text-[15px] text-brand-dark-3">No speakers added yet.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {speakers.map((s) => {
-                  const isSelected = s.id === selectedId;
-                  const timed = s.speech_seconds !== null;
-                  return (
-                    <div
-                      key={s.id}
-                      className={`flex items-center overflow-hidden rounded-full border text-[14px] ${
-                        isSelected
-                          ? "brand-gradient border-transparent text-white"
-                          : "border-brand-blue text-brand-dark-1"
-                      }`}
-                    >
-                      <button
-                        onClick={() => selectSpeaker(s.id)}
-                        className="flex items-center gap-2 py-2 pl-4 pr-2 text-left"
-                      >
-                        <span className="font-semibold">{s.name}</span>
-                        <span className={isSelected ? "opacity-80" : "text-brand-dark-3"}>
-                          {s.role}
-                        </span>
-                        {timed && <Check size={14} className={isSelected ? "" : "text-[#14c801]"} />}
-                      </button>
-                      <button
-                        onClick={() => setConfirm({ kind: "speaker", id: s.id })}
-                        aria-label={`Remove ${s.name}`}
-                        className="py-2 pl-1 pr-3 opacity-60 hover:opacity-100"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <div className="overflow-hidden rounded-lg border border-brand-dark-4">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-brand-blue/5 uppercase text-brand-dark-3">
+                    <th className="w-10 p-2 text-[12px] font-semibold sm:w-12 sm:p-3" aria-label="Select" />
+                    <th className="p-2 text-[12px] font-semibold sm:p-3">Name &amp; Role</th>
+                    <th className="p-2 text-[12px] font-semibold sm:p-3">Time</th>
+                    <th className="w-[60px] p-2 text-right text-[12px] font-semibold sm:w-[72px] sm:p-3">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {speakers.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-[15px] text-brand-dark-3">
+                        No speakers added yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    speakers.map((s) => {
+                      const canTime = Boolean(categoryForRole(s.role));
+                      const isSelected = s.id === selectedId;
+                      const timed = s.speech_seconds !== null;
+                      return (
+                        <tr
+                          key={s.id}
+                          onClick={() => canTime && selectSpeaker(s.id)}
+                          className={`border-t border-brand-dark-4 ${
+                            canTime ? "cursor-pointer" : ""
+                          } ${isSelected ? "bg-brand-blue/10" : ""}`}
+                        >
+                          <td className="p-2 sm:p-3">
+                            <input
+                              type="radio"
+                              name="timer-speaker"
+                              checked={isSelected}
+                              disabled={!canTime || mode !== "idle"}
+                              onChange={() => selectSpeaker(s.id)}
+                              aria-label={`Time ${s.name}`}
+                              className="size-5 accent-[#2182c3] disabled:opacity-30"
+                            />
+                          </td>
+                          <td className="p-2 sm:p-3">
+                            <p className="text-[16px] font-semibold leading-tight">{s.name}</p>
+                            <p className="text-[13px] text-brand-dark-3">
+                              {s.role}
+                              {!canTime && " · not timed"}
+                            </p>
+                          </td>
+                          <td className="p-2 sm:p-3">
+                            {timed ? (
+                              <>
+                                <p className="text-[16px] font-semibold tabular-nums">
+                                  {formatTime(s.speech_seconds ?? 0)}
+                                </p>
+                                <p className="text-[13px] text-brand-dark-3">{s.timer_note}</p>
+                              </>
+                            ) : (
+                              <span className="text-brand-dark-3">&mdash;</span>
+                            )}
+                          </td>
+                          <td className="p-2 sm:p-3">
+                            <div className="flex items-center justify-end gap-2">
+                              {timed && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setConfirm({ kind: "time", id: s.id });
+                                  }}
+                                  aria-label={`Clear ${s.name}'s time`}
+                                  title="Clear time"
+                                  className="text-brand-dark-3 hover:text-brand-dark-1"
+                                >
+                                  <Trash2 size={17} />
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirm({ kind: "speaker", id: s.id });
+                                }}
+                                aria-label={`Remove ${s.name}`}
+                                title="Remove speaker"
+                                className="text-brand-dark-3 hover:text-[#f94444]"
+                              >
+                                <X size={18} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="hidden flex-wrap justify-center gap-4 sm:flex">
-            {TIMER_CATEGORIES.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => selectCategory(c)}
-                className={`rounded-full border border-brand-blue px-4 py-2 text-[18px] font-semibold transition-colors ${
-                  c.id === categoryId ? "brand-gradient text-white" : "text-brand-dark-1"
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="relative w-full max-w-[320px] sm:hidden">
-            <select
-              value={categoryId}
-              onChange={(e) => {
-                const next = TIMER_CATEGORIES.find((c) => c.id === e.target.value);
-                if (next) selectCategory(next);
-              }}
-              className="h-[50px] w-full appearance-none rounded-lg border border-brand-blue px-4 pr-10 text-[18px] font-semibold text-brand-dark-1 outline-none focus:border-brand-blue"
-            >
-              {TIMER_CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              size={18}
-              className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-brand-dark-1"
-            />
-          </div>
-
-          <div className="flex w-full max-w-[800px] flex-col items-center gap-4 rounded-2xl border border-brand-dark-4 bg-white py-10 text-brand-dark-1">
+          {/* Right: the clock */}
+          <div className="flex min-w-0 flex-col items-center gap-4 rounded-2xl border border-brand-dark-4 bg-white px-4 py-10 text-brand-dark-1 lg:sticky lg:top-6">
             <p className="flex items-center gap-2 text-[16px] text-brand-dark-3">
               <UserRound size={16} />
               {selected ? (
@@ -351,13 +374,18 @@ export default function TimerPage() {
                   <span className="font-semibold text-brand-dark-1">{selected.name}</span>
                 </>
               ) : (
-                "Pick a speaker above to start timing"
+                "Select a speaker to start timing"
               )}
             </p>
-            <p className="text-[96px] font-semibold leading-none tabular-nums sm:text-[160px]">
-              {formatTime(remaining)}
+            {selected && (
+              <p className="text-[14px] font-semibold uppercase tracking-wide text-brand-blue">
+                {category.label}
+              </p>
+            )}
+            <p className="text-[88px] font-semibold leading-none tabular-nums sm:text-[130px]">
+              {formatTime(shownRemaining)}
             </p>
-            <div className="h-[13px] w-[90%] max-w-[586px] overflow-hidden rounded-lg border border-black/20 bg-white/60">
+            <div className="h-[13px] w-[90%] max-w-[480px] overflow-hidden rounded-lg border border-black/20 bg-white/60">
               <div
                 className="h-full brand-gradient transition-[width]"
                 style={{ width: `${progressPct}%` }}
@@ -375,99 +403,6 @@ export default function TimerPage() {
             )}
           </div>
         </div>
-
-        <section className="flex w-full flex-1 flex-col px-6 py-8 brand-gradient sm:px-0">
-          <h2 className="mb-6 text-center text-[32px] font-extrabold text-white sm:text-[42px]">
-            Timer Summary
-          </h2>
-          <div className="mx-auto w-full max-w-[800px]">
-            {/* Desktop / tablet: table */}
-            <div className="hidden overflow-x-auto rounded-lg border border-brand-dark-4 sm:block">
-              <table className="w-full min-w-[640px] text-left text-white">
-                <thead>
-                  <tr className="bg-white/5 uppercase">
-                    <th className="p-3.5 text-[14px] font-normal">Toastmaster&rsquo;s Name</th>
-                    <th className="p-3.5 text-[14px] font-normal">Speech Category</th>
-                    <th className="p-3.5 text-[14px] font-normal">Time</th>
-                    <th className="p-3.5 text-[14px] font-normal">Note</th>
-                    <th className="p-3.5 text-[14px] font-normal">Clear</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {timedRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center">
-                        No data to display.
-                      </td>
-                    </tr>
-                  ) : (
-                    timedRows.map((row) => (
-                      <tr key={row.id} className="border-t border-white/20">
-                        <td className="p-3.5">{row.name}</td>
-                        <td className="p-3.5">
-                          {TIMER_CATEGORIES.find((c) => c.id === row.timer_category)?.label ??
-                            row.role}
-                        </td>
-                        <td className="p-3.5">{formatTime(row.speech_seconds ?? 0)}</td>
-                        <td className="p-3.5">{row.timer_note}</td>
-                        <td className="p-3.5">
-                          <button
-                            onClick={() => setConfirm({ kind: "time", id: row.id })}
-                            aria-label="Clear time"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile: stacked cards, no horizontal scroll needed */}
-            <div className="flex flex-col gap-3 sm:hidden">
-              {timedRows.length === 0 ? (
-                <div className="rounded-lg border border-brand-dark-4 p-8 text-center text-white">
-                  No data to display.
-                </div>
-              ) : (
-                timedRows.map((row) => (
-                  <div
-                    key={row.id}
-                    className="flex flex-col gap-3 rounded-lg border border-brand-dark-4 bg-white/5 p-4 text-white"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="text-[16px] font-semibold">{row.name}</p>
-                      <button
-                        onClick={() => setConfirm({ kind: "time", id: row.id })}
-                        aria-label="Clear time"
-                        className="shrink-0 text-white/80 hover:text-white"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                    <div className="flex flex-col gap-1.5 text-[14px]">
-                      <p>
-                        <span className="text-white/60">Speech Category: </span>
-                        {TIMER_CATEGORIES.find((c) => c.id === row.timer_category)?.label ??
-                          row.role}
-                      </p>
-                      <p>
-                        <span className="text-white/60">Time: </span>
-                        {formatTime(row.speech_seconds ?? 0)}
-                      </p>
-                      <p>
-                        <span className="text-white/60">Note: </span>
-                        {row.timer_note}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </section>
       </main>
 
       {(mode === "running" || mode === "saving") && (
@@ -518,7 +453,7 @@ export default function TimerPage() {
                       onChange={(e) => setSaveForId(e.target.value)}
                       className={`${fieldClass} w-full appearance-none pr-10`}
                     >
-                      {speakers.map((s) => (
+                      {timableSpeakers.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.name} ({s.role})
                         </option>

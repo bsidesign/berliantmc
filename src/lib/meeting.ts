@@ -42,7 +42,7 @@ export type Vote = {
 // Roles & voting categories
 // ---------------------------------------------------------------------------
 
-export const BALLOT_CATEGORIES = ["Prepared Speech", "Evaluation Speech", "Table Topic"] as const;
+export const BALLOT_CATEGORIES = ["Prepared Speech", "Evaluation Speech"] as const;
 export type BallotCategory = (typeof BALLOT_CATEGORIES)[number];
 
 export type RoleDef = {
@@ -60,7 +60,6 @@ export type RoleDef = {
 export const SPEAKER_ROLES: RoleDef[] = [
   { label: "Prepared Speaker", max: 5, timerCategoryId: "prepared", ballotCategory: "Prepared Speech" },
   { label: "Evaluator", max: 5, timerCategoryId: "evaluation", ballotCategory: "Evaluation Speech" },
-  { label: "Table Topic Speaker", max: 10, timerCategoryId: "tabletopic", ballotCategory: "Table Topic" },
   { label: "General Evaluator", max: 1, timerCategoryId: "general" },
   { label: "TOM", max: 1 },
   { label: "Grammarian", max: 1 },

@@ -41,7 +41,6 @@ export default function BallotPage() {
   const [revealed, setRevealed] = useState<Record<BallotCategory, boolean>>({
     "Prepared Speech": false,
     "Evaluation Speech": false,
-    "Table Topic": false,
   });
   const [certificate, setCertificate] = useState<BallotCategory | null>(null);
 
@@ -233,7 +232,7 @@ export default function BallotPage() {
             </p>
           </div>
 
-          <div className="grid w-full gap-8 sm:grid-cols-3">
+          <div className="grid w-full gap-8 sm:grid-cols-2">
             {BALLOT_CATEGORIES.map((category) => (
               <div
                 key={category}
@@ -350,7 +349,7 @@ export default function BallotPage() {
           </p>
         </div>
 
-        <div className="grid w-full gap-6 sm:grid-cols-3">
+        <div className="grid w-full gap-6 sm:grid-cols-2">
           {BALLOT_CATEGORIES.map((category) => {
             const list = candidates(category);
             return (
