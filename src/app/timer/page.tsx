@@ -85,7 +85,7 @@ function categoryForRole(role: string): TimerCategory | undefined {
 export default function TimerPage() {
   const { meeting, speakers, ready, configured, runMutation } = useRequireMeeting("/timer");
 
-  const [remaining, setRemaining] = useState(0);
+  const [seconds, setSeconds] = useState(0);
   const [mode, setMode] = useState<Mode>("idle");
   const [finalElapsed, setFinalElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -112,7 +112,7 @@ export default function TimerPage() {
   useEffect(() => {
     if (mode === "running") {
       intervalRef.current = setInterval(() => {
-        setRemaining((r) => r - 1);
+        setSeconds((n) => n + 1);
       }, 1000);
     } else if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -122,9 +122,8 @@ export default function TimerPage() {
     };
   }, [mode]);
 
-  // While idle the clock always shows the full time for the chosen speaker.
-  const shownRemaining = mode === "idle" ? category.red : remaining;
-  const elapsed = category.red - shownRemaining;
+  // The clock counts up from 00:00; while idle it always shows 00:00.
+  const elapsed = mode === "idle" ? 0 : seconds;
   const progressPct = Math.min(100, Math.max(0, (elapsed / category.red) * 100));
 
   // A speaker who already has a recorded time can't be started again until
@@ -138,7 +137,7 @@ export default function TimerPage() {
     }
     if (alreadyTimed) return;
     setStartError(null);
-    setRemaining(category.red);
+    setSeconds(0);
     setMode("running");
   }
 
@@ -419,7 +418,7 @@ export default function TimerPage() {
               </p>
             )}
             <p className="text-[88px] font-semibold leading-none tabular-nums sm:text-[130px]">
-              {formatTime(shownRemaining)}
+              {formatTime(elapsed)}
             </p>
             <div className="h-[13px] w-[90%] max-w-[480px] overflow-hidden rounded-lg border border-black/20 bg-white/60">
               <div
@@ -466,7 +465,7 @@ export default function TimerPage() {
             {selected ? `${selected.name} · ` : ""}
             {category.label}
           </p>
-          <FitTime text={formatTime(mode === "saving" ? finalElapsed : remaining)} />
+          <FitTime text={formatTime(elapsed)} />
 
           {mode === "running" && (
             <button
