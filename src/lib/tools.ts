@@ -1,4 +1,4 @@
-import { Timer, Lightbulb, Megaphone, BarChart3, type LucideIcon } from "lucide-react";
+import { Timer, Megaphone, BarChart3, type LucideIcon } from "lucide-react";
 
 export type ToolDef = {
   href: string;
@@ -8,7 +8,7 @@ export type ToolDef = {
   cta: string;
 };
 
-// Single source of truth for the four meeting tools — used on the Home
+// Single source of truth for the meeting tools — used on the Home
 // dashboard and can be reused anywhere else the app needs the tool list.
 export const TOOLS: ToolDef[] = [
   {
@@ -18,14 +18,6 @@ export const TOOLS: ToolDef[] = [
     description:
       "Set the timer and signal speakers when they reach each time limit.",
     cta: "Open Timer",
-  },
-  {
-    href: "/table-topics",
-    icon: Lightbulb,
-    title: "Table Topics Master",
-    description:
-      "Generate random topics and invite members to give impromptu speeches.",
-    cta: "Open TTM",
   },
   {
     href: "/ah-counter",

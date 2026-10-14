@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, QrCode } from "lucide-react";
+import { QrCode } from "lucide-react";
 import Header from "@/components/Header";
 import RoleCard from "@/components/RoleCard";
 import InviteScreen from "@/components/InviteScreen";
@@ -39,6 +39,8 @@ export default function HomePage() {
   // only fires once per tab, so the Menu link can still reach the role picker.
   useEffect(() => {
     if (!hydrated || !active?.role || hasResumed()) return;
+    // Ignore roles that no longer exist (e.g. an old Table Topics screen).
+    if (!TOOLS.some((t) => t.href === active.role)) return;
     markResumed();
     router.replace(active.role);
   }, [hydrated, active, router]);
@@ -210,7 +212,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="flex w-full max-w-[480px] flex-col items-center gap-6">
+        <div className="flex w-full max-w-[680px] flex-col items-center gap-6">
           {TOOLS.map((tool) => (
             <RoleCard key={tool.href} {...tool} />
           ))}
@@ -222,12 +224,6 @@ export default function HomePage() {
             className="flex items-center gap-2 text-brand-blue"
           >
             <QrCode size={18} /> Show Join QR Code
-          </button>
-          <button
-            onClick={clearActiveMeeting}
-            className="flex items-center gap-2 text-brand-dark-3 hover:text-brand-dark-1"
-          >
-            <LogOut size={18} /> Leave Meeting
           </button>
         </div>
       </main>
