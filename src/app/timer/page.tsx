@@ -1,10 +1,26 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Play, Square, Trash2, X, ChevronDown, Plus, UserRound } from "lucide-react";
+import {
+  Play,
+  Square,
+  Trash2,
+  X,
+  ChevronDown,
+  Plus,
+  UserRound,
+  SlidersHorizontal,
+} from "lucide-react";
 import Header from "@/components/Header";
 import MeetingBar from "@/components/MeetingBar";
 import { TIMER_CATEGORIES, type TimerCategory, formatTime } from "@/lib/timer-categories";
+import {
+  type Thresholds,
+  resetThresholds,
+  saveThresholds,
+  useTimerCategories,
+  validateThresholds,
+} from "@/lib/timer-settings";
 import {
   SPEAKER_ROLES,
   addSpeaker,
@@ -77,13 +93,34 @@ function FitTime({ text }: { text: string }) {
   );
 }
 
-function categoryForRole(role: string): TimerCategory | undefined {
+function categoryForRole(role: string, categories: TimerCategory[]): TimerCategory | undefined {
   const id = roleDef(role)?.timerCategoryId;
-  return id ? TIMER_CATEGORIES.find((c) => c.id === id) : undefined;
+  return id ? categories.find((c) => c.id === id) : undefined;
+}
+
+// The four light changes, in order, with the wording shown beside each one.
+const LIGHTS: { key: keyof Thresholds; label: string; color: string; note: string }[] = [
+  { key: "green", label: "Green", color: "#14c801", note: "Minimum time reached" },
+  { key: "yellow", label: "Yellow", color: "#f5c518", note: "Wrap up" },
+  { key: "red", label: "Red", color: "#f94444", note: "Maximum time" },
+  { key: "black", label: "Black", color: "#000000", note: "Over time, not eligible to vote" },
+];
+
+type Draft = Record<keyof Thresholds, { m: string; s: string }>;
+
+function toDraft(t: Thresholds): Draft {
+  const part = (sec: number) => ({ m: String(Math.floor(sec / 60)), s: String(Math.round(sec % 60)) });
+  return { green: part(t.green), yellow: part(t.yellow), red: part(t.red), black: part(t.black) };
+}
+
+function fromDraft(d: Draft): Thresholds {
+  const sec = (x: { m: string; s: string }) => Number(x.m || 0) * 60 + Number(x.s || 0);
+  return { green: sec(d.green), yellow: sec(d.yellow), red: sec(d.red), black: sec(d.black) };
 }
 
 export default function TimerPage() {
   const { meeting, speakers, ready, configured, runMutation } = useRequireMeeting("/timer");
+  const { categories, isCustomized } = useTimerCategories();
 
   const [seconds, setSeconds] = useState(0);
   const [mode, setMode] = useState<Mode>("idle");
@@ -101,7 +138,7 @@ export default function TimerPage() {
 
   const selected = speakers.find((s) => s.id === selectedId) ?? null;
   // The timing rules come from the chosen speaker's role: no tabs to pick.
-  const category = (selected && categoryForRole(selected.role)) || TIMER_CATEGORIES[0];
+  const category = (selected && categoryForRole(selected.role, categories)) || categories[0];
 
   function selectSpeaker(id: string) {
     if (mode !== "idle") return;
@@ -154,7 +191,7 @@ export default function TimerPage() {
   async function handleSaveTime() {
     const target = speakers.find((s) => s.id === saveForId);
     if (!target) return;
-    const targetCategory = categoryForRole(target.role) ?? category;
+    const targetCategory = categoryForRole(target.role, categories) ?? category;
     const finalZone = zoneFor(finalElapsed, targetCategory);
     await runMutation(() =>
       saveTiming(
@@ -204,9 +241,44 @@ export default function TimerPage() {
     }
   }
 
+  // "Customize" editor for the light times.
+  const [editing, setEditing] = useState<{ categoryId: string; draft: Draft } | null>(null);
+
+  function openEditor() {
+    setEditing({ categoryId: category.id, draft: toDraft(category) });
+  }
+
+  function editCategory(categoryId: string) {
+    const target = categories.find((c) => c.id === categoryId);
+    if (target) setEditing({ categoryId, draft: toDraft(target) });
+  }
+
+  function editField(key: keyof Thresholds, unit: "m" | "s", value: string) {
+    setEditing((prev) =>
+      prev
+        ? { ...prev, draft: { ...prev.draft, [key]: { ...prev.draft[key], [unit]: value } } }
+        : prev
+    );
+  }
+
+  const editError = editing ? validateThresholds(fromDraft(editing.draft)) : null;
+
+  function handleSaveSettings() {
+    if (!editing || editError) return;
+    saveThresholds(editing.categoryId, fromDraft(editing.draft));
+    setEditing(null);
+  }
+
+  function handleResetSettings() {
+    if (!editing) return;
+    resetThresholds(editing.categoryId);
+    const original = TIMER_CATEGORIES.find((c) => c.id === editing.categoryId);
+    if (original) setEditing({ categoryId: original.id, draft: toDraft(original) });
+  }
+
   const zone = zoneFor(elapsed, category);
   const confirmTarget = speakers.find((s) => s.id === confirm?.id) ?? null;
-  const timableSpeakers = speakers.filter((s) => categoryForRole(s.role));
+  const timableSpeakers = speakers.filter((s) => categoryForRole(s.role, categories));
 
   if (!configured) {
     return (
@@ -321,7 +393,7 @@ export default function TimerPage() {
                     </tr>
                   ) : (
                     speakers.map((s) => {
-                      const canTime = Boolean(categoryForRole(s.role));
+                      const canTime = Boolean(categoryForRole(s.role, categories));
                       const isSelected = s.id === selectedId;
                       const timed = s.speech_seconds !== null;
                       return (
@@ -443,6 +515,46 @@ export default function TimerPage() {
             {startError && (
               <p className="text-[14px] font-medium text-[#f94444]">{startError}</p>
             )}
+
+            <div className="mt-2 flex w-[90%] max-w-[480px] flex-col gap-3 border-t border-brand-dark-4 pt-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <p className="text-[16px] font-extrabold">Timing lights</p>
+                  <span className="text-[14px] text-brand-dark-3">{category.label}</span>
+                  {isCustomized(category.id) && (
+                    <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[12px] font-semibold text-brand-blue">
+                      Customized
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={openEditor}
+                  className="flex shrink-0 items-center gap-1.5 text-[14px] font-semibold text-brand-blue"
+                >
+                  <SlidersHorizontal size={15} /> Customize
+                </button>
+              </div>
+              <ul className="flex flex-col gap-2.5">
+                <li className="flex items-center gap-3 text-[14px]">
+                  <span className="size-4 shrink-0 rounded-full border border-black/30 bg-white" />
+                  <span className="font-semibold">White</span>
+                  <span className="text-brand-dark-3">Starts at 00:00, under minimum time</span>
+                </li>
+                {LIGHTS.map((l) => (
+                  <li key={l.key} className="flex items-center gap-3 text-[14px]">
+                    <span
+                      className="size-4 shrink-0 rounded-full"
+                      style={{ backgroundColor: l.color }}
+                    />
+                    <span className="w-[52px] shrink-0 font-semibold">{l.label}</span>
+                    <span className="w-[52px] shrink-0 font-semibold tabular-nums">
+                      {formatTime(category[l.key])}
+                    </span>
+                    <span className="min-w-0 text-brand-dark-3">{l.note}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </main>
@@ -523,6 +635,96 @@ export default function TimerPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-6">
+          <div className="flex w-full max-w-[460px] flex-col gap-5 rounded-2xl bg-white p-8 text-brand-dark-1">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-[24px] font-extrabold">Customize Timing Lights</h3>
+              <p className="text-[14px] text-brand-dark-3">
+                Set the time (minutes and seconds) when each light turns on. Saved on this device
+                and used for every meeting.
+              </p>
+            </div>
+
+            <div className="relative">
+              <select
+                value={editing.categoryId}
+                onChange={(e) => editCategory(e.target.value)}
+                className={`${fieldClass} w-full appearance-none pr-10 font-semibold`}
+              >
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={18}
+                className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2"
+              />
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {LIGHTS.map((l) => (
+                <div key={l.key} className="flex items-center gap-3">
+                  <span
+                    className="size-4 shrink-0 rounded-full"
+                    style={{ backgroundColor: l.color }}
+                  />
+                  <span className="w-[60px] shrink-0 text-[15px] font-semibold">{l.label}</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={editing.draft[l.key].m}
+                    onChange={(e) => editField(l.key, "m", e.target.value)}
+                    aria-label={`${l.label} minutes`}
+                    className={`${fieldClass} h-[44px] w-[72px] px-3 text-center tabular-nums`}
+                  />
+                  <span className="text-[14px] text-brand-dark-3">min</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={editing.draft[l.key].s}
+                    onChange={(e) => editField(l.key, "s", e.target.value)}
+                    aria-label={`${l.label} seconds`}
+                    className={`${fieldClass} h-[44px] w-[72px] px-3 text-center tabular-nums`}
+                  />
+                  <span className="text-[14px] text-brand-dark-3">sec</span>
+                </div>
+              ))}
+            </div>
+
+            {editError && <p className="text-[14px] font-medium text-[#f94444]">{editError}</p>}
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <button
+                onClick={handleResetSettings}
+                className="text-[14px] font-semibold text-brand-blue"
+              >
+                Reset to default
+              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditing(null)}
+                  className="rounded-lg border border-black/25 px-5 py-3 text-[15px] font-semibold text-brand-dark-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveSettings}
+                  disabled={Boolean(editError)}
+                  className="rounded-lg brand-gradient px-6 py-3 text-[15px] font-semibold text-white disabled:opacity-50"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
