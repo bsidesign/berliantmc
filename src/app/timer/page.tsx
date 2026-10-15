@@ -10,6 +10,8 @@ import {
   Plus,
   UserRound,
   SlidersHorizontal,
+  BadgeCheck,
+  Ban,
 } from "lucide-react";
 import Header from "@/components/Header";
 import MeetingBar from "@/components/MeetingBar";
@@ -57,6 +59,23 @@ const ZONE_NOTES: Record<Zone, string> = {
   yellow: "Wrap up",
   red: "Over time",
   black: "Not eligible to vote",
+};
+
+const ZONE_DOT: Record<Zone, string> = {
+  white: "#ffffff",
+  green: "#14c801",
+  yellow: "#f5c518",
+  red: "#f94444",
+  black: "#000000",
+};
+
+// Wording for the save box (the "black" light means over time).
+const ZONE_NOTES_SAVE: Record<Zone, string> = {
+  white: "Under minimum time",
+  green: "On time",
+  yellow: "Wrap up",
+  red: "Over time",
+  black: "Over time",
 };
 
 const fieldClass =
@@ -278,7 +297,12 @@ export default function TimerPage() {
 
   const zone = zoneFor(elapsed, category);
   const confirmTarget = speakers.find((s) => s.id === confirm?.id) ?? null;
-  const timableSpeakers = speakers.filter((s) => categoryForRole(s.role, categories));
+  // Details for the "Save This Time?" box: the speaker is fixed at Stop time.
+  const saveTarget = speakers.find((s) => s.id === saveForId) ?? null;
+  const saveCategory = (saveTarget && categoryForRole(saveTarget.role, categories)) || category;
+  const saveZone = zoneFor(finalElapsed, saveCategory);
+  const saveEligible = saveZone !== "black";
+  const saveHasVote = Boolean(saveTarget && roleDef(saveTarget.role)?.ballotCategory);
 
   if (!configured) {
     return (
@@ -591,42 +615,73 @@ export default function TimerPage() {
 
           {mode === "saving" && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 p-6">
-              <div className="flex w-full max-w-[420px] flex-col gap-4 rounded-2xl bg-white p-8 text-brand-dark-1">
+              <div className="flex w-full max-w-[420px] flex-col gap-5 rounded-2xl bg-white p-8 text-brand-dark-1">
                 <h3 className="text-[24px] font-extrabold">Save This Time?</h3>
-                <p className="text-[15px] text-brand-dark-3">
-                  Time: {formatTime(finalElapsed)} &middot; {category.label} &middot;{" "}
-                  {ZONE_NOTES[zoneFor(finalElapsed, category)]}
-                </p>
-                <div className="flex flex-col gap-2">
-                  <label className="text-[14px] font-semibold">Who just spoke?</label>
-                  <div className="relative">
-                    <select
-                      value={saveForId ?? ""}
-                      onChange={(e) => setSaveForId(e.target.value)}
-                      className={`${fieldClass} w-full appearance-none pr-10`}
-                    >
-                      {timableSpeakers.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.role})
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={18}
-                      className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2"
-                    />
+
+                {saveTarget ? (
+                  <div className="flex flex-col gap-4 rounded-xl border border-brand-dark-4 p-5">
+                    <div className="flex flex-col gap-0.5">
+                      <p className="text-[13px] font-semibold uppercase tracking-wide text-brand-dark-3">
+                        This is
+                      </p>
+                      <p className="text-[24px] font-extrabold leading-tight">{saveTarget.name}</p>
+                      <p className="text-[15px] text-brand-dark-3">{saveTarget.role}</p>
+                    </div>
+
+                    <div className="flex items-end justify-between gap-4 border-t border-brand-dark-4 pt-4">
+                      <div className="flex flex-col">
+                        <p className="text-[13px] font-semibold uppercase tracking-wide text-brand-dark-3">
+                          Time
+                        </p>
+                        <p className="text-[40px] font-semibold leading-none tabular-nums">
+                          {formatTime(finalElapsed)}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 text-right">
+                        <p className="text-[14px] font-semibold">{saveCategory.label}</p>
+                        <p className="flex items-center gap-2 text-[14px] text-brand-dark-3">
+                          <span
+                            className="size-3 rounded-full border border-black/20"
+                            style={{ backgroundColor: ZONE_DOT[saveZone] }}
+                          />
+                          {ZONE_NOTES_SAVE[saveZone]}
+                        </p>
+                      </div>
+                    </div>
+
+                    {saveHasVote ? (
+                      <span
+                        className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[15px] font-semibold ${
+                          saveEligible
+                            ? "bg-[#14c801]/15 text-[#0b7a00]"
+                            : "bg-[#f94444]/15 text-[#c42323]"
+                        }`}
+                      >
+                        {saveEligible ? <BadgeCheck size={18} /> : <Ban size={18} />}
+                        {saveEligible ? "Eligible to vote" : "Not eligible to vote"}
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center rounded-lg bg-black/5 px-4 py-2.5 text-[15px] font-semibold text-brand-dark-3">
+                        No voting for this role
+                      </span>
+                    )}
                   </div>
-                </div>
+                ) : (
+                  <p className="text-[15px] text-brand-dark-3">
+                    This speaker was removed from the list, so the time can&rsquo;t be saved.
+                  </p>
+                )}
+
                 <div className="flex justify-end gap-3">
                   <button
                     onClick={handleReset}
                     className="rounded-lg border border-black/25 px-5 py-3 text-[15px] font-semibold text-brand-dark-2"
                   >
-                    Discard
+                    Cancel
                   </button>
                   <button
                     onClick={handleSaveTime}
-                    disabled={!saveForId}
+                    disabled={!saveTarget}
                     className="rounded-lg brand-gradient px-6 py-3 text-[15px] font-semibold text-white disabled:opacity-50"
                   >
                     Add to Summary
