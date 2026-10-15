@@ -53,8 +53,14 @@ const ZONE_STYLES: Record<Zone, string> = {
   black: "bg-black text-white",
 };
 
+// Only speakers who finish in the green, yellow or red light can be voted for:
+// finishing under the minimum (white) or past the black light is not eligible.
+function isEligibleZone(zone: Zone): boolean {
+  return zone !== "white" && zone !== "black";
+}
+
 const ZONE_NOTES: Record<Zone, string> = {
-  white: "Under minimum time",
+  white: "Under minimum time, not eligible to vote",
   green: "On time",
   yellow: "Wrap up",
   red: "Over time",
@@ -218,7 +224,7 @@ export default function TimerPage() {
         finalElapsed,
         targetCategory.id,
         ZONE_NOTES[finalZone],
-        finalZone !== "black"
+        isEligibleZone(finalZone)
       )
     );
     setSelectedId(null);
@@ -301,7 +307,7 @@ export default function TimerPage() {
   const saveTarget = speakers.find((s) => s.id === saveForId) ?? null;
   const saveCategory = (saveTarget && categoryForRole(saveTarget.role, categories)) || category;
   const saveZone = zoneFor(finalElapsed, saveCategory);
-  const saveEligible = saveZone !== "black";
+  const saveEligible = isEligibleZone(saveZone);
   const saveHasVote = Boolean(saveTarget && roleDef(saveTarget.role)?.ballotCategory);
 
   if (!configured) {
@@ -562,7 +568,7 @@ export default function TimerPage() {
                 <li className="flex items-center gap-3 text-[14px]">
                   <span className="size-4 shrink-0 rounded-full border border-black/30 bg-white" />
                   <span className="font-semibold">White</span>
-                  <span className="text-brand-dark-3">Starts at 00:00, under minimum time</span>
+                  <span className="text-brand-dark-3">Starts at 00:00, under minimum time, not eligible to vote</span>
                 </li>
                 {LIGHTS.map((l) => (
                   <li key={l.key} className="flex items-center gap-3 text-[14px]">

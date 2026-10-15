@@ -379,7 +379,7 @@ export default function BallotPage() {
 
         {overTime.length > 0 && (
           <p className="max-w-[620px] text-center text-[14px] text-brand-dark-3">
-            Not eligible (went over time):{" "}
+            Not eligible (outside the time limits):{" "}
             {overTime.map((s) => s.name).join(", ")}
           </p>
         )}
