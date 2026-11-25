@@ -34,7 +34,6 @@ export type Vote = {
   meeting_id: string;
   speaker_id: string;
   category: string;
-  voter_id: string;
   created_at: string;
 };
 
@@ -79,103 +78,128 @@ export function votableCategory(s: Speaker): BallotCategory | null {
 // Database helpers
 // ---------------------------------------------------------------------------
 
+// Every call goes through a database function that checks the meeting code,
+// so nobody can read or change a meeting without knowing its code.
+
 export async function createMeeting(
   clubName: string
 ): Promise<{ meeting?: Meeting; error?: string }> {
   // Codes are random, so retry in the (unlikely) event of a collision.
   for (let attempt = 0; attempt < 5; attempt++) {
-    const { data, error } = await supabase
-      .from("meetings")
-      .insert({ code: randomCode(), club_name: clubName })
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc("create_meeting", {
+      p_code: randomCode(),
+      p_club_name: clubName,
+    });
     if (!error) return { meeting: data as Meeting };
     if (error.code !== "23505") return { error: error.message };
   }
   return { error: "Could not generate a unique meeting code. Please try again." };
 }
 
+/** The meeting and its speakers in one call, or null if the code doesn't exist. */
+export async function fetchMeetingWithSpeakers(
+  code: string
+): Promise<{ meeting: Meeting; speakers: Speaker[] } | null> {
+  const { data, error } = await supabase.rpc("get_meeting", { p_code: code.trim().toUpperCase() });
+  if (error) throw error; // network/database trouble: keep showing the last data
+  return (data as { meeting: Meeting; speakers: Speaker[] } | null) ?? null;
+}
+
 export async function fetchMeetingByCode(code: string): Promise<Meeting | null> {
-  const { data } = await supabase
-    .from("meetings")
-    .select("*")
-    .eq("code", code.trim().toUpperCase())
-    .maybeSingle();
-  return (data as Meeting | null) ?? null;
+  const { data } = await supabase.rpc("get_meeting", { p_code: code.trim().toUpperCase() });
+  return (data as { meeting: Meeting } | null)?.meeting ?? null;
 }
 
-export async function fetchSpeakers(meetingId: string): Promise<Speaker[]> {
-  const { data } = await supabase
-    .from("meeting_speakers")
-    .select("*")
-    .eq("meeting_id", meetingId)
-    .order("created_at", { ascending: true });
-  return (data as Speaker[]) ?? [];
+export async function addSpeaker(code: string, name: string, role: string) {
+  return supabase.rpc("add_meeting_speaker", { p_code: code, p_name: name, p_role: role });
 }
 
-export async function addSpeaker(meetingId: string, name: string, role: string) {
-  return supabase.from("meeting_speakers").insert({ meeting_id: meetingId, name, role });
-}
-
-export async function removeSpeaker(speakerId: string) {
-  return supabase.from("meeting_speakers").delete().eq("id", speakerId);
+export async function removeSpeaker(code: string, speakerId: string) {
+  return supabase.rpc("delete_meeting_speaker", { p_code: code, p_speaker_id: speakerId });
 }
 
 export async function saveTiming(
+  code: string,
   speakerId: string,
   seconds: number,
   categoryId: string,
   note: string,
   eligible: boolean
 ) {
-  return supabase
-    .from("meeting_speakers")
-    .update({
+  return supabase.rpc("update_meeting_speaker_timing", {
+    p_code: code,
+    p_speaker_id: speakerId,
+    p_changes: {
       speech_seconds: Math.round(seconds),
       timer_category: categoryId,
       timer_note: note,
       eligible,
-    })
-    .eq("id", speakerId);
+    },
+  });
 }
 
-export async function clearTiming(speakerId: string) {
-  return supabase
-    .from("meeting_speakers")
-    .update({ speech_seconds: null, timer_category: null, timer_note: null, eligible: true })
-    .eq("id", speakerId);
+export async function clearTiming(code: string, speakerId: string) {
+  return supabase.rpc("update_meeting_speaker_timing", {
+    p_code: code,
+    p_speaker_id: speakerId,
+    p_changes: { speech_seconds: null, timer_category: null, timer_note: null, eligible: true },
+  });
 }
 
 /** Atomic +/- on the server so two counters tapping at once never clash. */
-export async function bumpCount(speakerId: string, field: "filler" | "wod", delta: number) {
-  return supabase.rpc("bump_speaker_count", {
-    p_speaker: speakerId,
+export async function bumpCount(
+  code: string,
+  speakerId: string,
+  field: "filler" | "wod",
+  delta: number
+) {
+  return supabase.rpc("bump_meeting_speaker_count", {
+    p_code: code,
+    p_speaker_id: speakerId,
     p_field: field,
     p_delta: delta,
   });
 }
 
-export async function setVotingOpen(meetingId: string, open: boolean) {
-  return supabase.from("meetings").update({ voting_open: open }).eq("id", meetingId);
+export async function setVotingOpen(code: string, open: boolean) {
+  return supabase.rpc("set_meeting_voting", { p_code: code, p_open: open });
 }
 
-export async function fetchVotes(meetingId: string): Promise<Vote[]> {
-  const { data } = await supabase.from("meeting_votes").select("*").eq("meeting_id", meetingId);
+/** All votes in the meeting (voter ids are never sent back). */
+export async function fetchVotes(code: string): Promise<Vote[]> {
+  const { data } = await supabase.rpc("get_meeting_votes", { p_code: code });
   return (data as Vote[]) ?? [];
 }
 
-export async function castVote(
-  meetingId: string,
-  speakerId: string,
-  category: string,
-  voterId: string
-) {
-  return supabase.from("meeting_votes").insert({
-    meeting_id: meetingId,
-    speaker_id: speakerId,
-    category,
-    voter_id: voterId,
+/** category -> speaker id this browser already voted for. */
+export async function fetchMyVotes(code: string, voterId: string): Promise<Record<string, string>> {
+  const { data } = await supabase.rpc("get_my_votes", { p_code: code, p_voter_id: voterId });
+  const map: Record<string, string> = {};
+  for (const v of (data as { category: string; speaker_id: string }[]) ?? []) {
+    map[v.category] = v.speaker_id;
+  }
+  return map;
+}
+
+export async function castVote(code: string, speakerId: string, category: string, voterId: string) {
+  return supabase.rpc("cast_meeting_vote", {
+    p_code: code,
+    p_speaker_id: speakerId,
+    p_category: category,
+    p_voter_id: voterId,
   });
+}
+
+/**
+ * Live updates: calls onChange whenever anything in this meeting changes
+ * (meeting, speakers or votes). Returns a function that stops listening.
+ */
+export function onMeetingChange(code: string, onChange: () => void) {
+  const channel = supabase
+    .channel(`meeting:${code.trim().toUpperCase()}`)
+    .on("broadcast", { event: "changed" }, () => onChange())
+    .subscribe();
+  return () => void supabase.removeChannel(channel);
 }
 
 // ---------------------------------------------------------------------------

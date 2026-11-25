@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import {
-  fetchMeetingByCode,
-  fetchSpeakers,
+  fetchMeetingWithSpeakers,
+  onMeetingChange,
   type Meeting,
   type Speaker,
 } from "@/lib/meeting";
@@ -43,7 +43,6 @@ export function useMeetingData(code: string | null) {
   const inflight = useRef(0);
   const reloadRef = useRef<() => Promise<void>>(async () => {});
   const current = data.code === code ? data : EMPTY;
-  const meetingId = current.meeting?.id ?? null;
 
   useEffect(() => {
     if (!code || !isSupabaseConfigured) return;
@@ -51,49 +50,33 @@ export function useMeetingData(code: string | null) {
     let cancelled = false;
 
     async function refresh() {
-      const meeting = await fetchMeetingByCode(activeCode);
+      let found;
+      try {
+        found = await fetchMeetingWithSpeakers(activeCode);
+      } catch {
+        return; // network hiccup: keep the last data, the next poll retries
+      }
       if (cancelled || inflight.current > 0) return;
-      if (!meeting) {
+      if (!found) {
         setData({ code: activeCode, meeting: null, speakers: [], status: "missing" });
         return;
       }
-      const speakers = await fetchSpeakers(meeting.id);
-      if (cancelled || inflight.current > 0) return;
-      setData({ code: activeCode, meeting, speakers, status: "ready" });
+      setData({ code: activeCode, meeting: found.meeting, speakers: found.speakers, status: "ready" });
     }
 
     reloadRef.current = refresh;
     void refresh();
     const timer = setInterval(() => void refresh(), POLL_MS);
 
-    // Realtime: any change to this meeting or its speakers triggers a refresh.
-    const channel = meetingId
-      ? supabase
-          .channel(`meeting-${meetingId}`)
-          .on(
-            "postgres_changes",
-            { event: "*", schema: "public", table: "meetings", filter: `id=eq.${meetingId}` },
-            () => void refresh()
-          )
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "meeting_speakers",
-              filter: `meeting_id=eq.${meetingId}`,
-            },
-            () => void refresh()
-          )
-          .subscribe()
-      : null;
+    // Live updates: any change in this meeting triggers a refresh.
+    const stopListening = onMeetingChange(activeCode, () => void refresh());
 
     return () => {
       cancelled = true;
       clearInterval(timer);
-      if (channel) void supabase.removeChannel(channel);
+      stopListening();
     };
-  }, [code, meetingId]);
+  }, [code]);
 
   const reload = useCallback(() => reloadRef.current(), []);
 

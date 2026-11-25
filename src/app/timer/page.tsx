@@ -215,11 +215,12 @@ export default function TimerPage() {
 
   async function handleSaveTime() {
     const target = speakers.find((s) => s.id === saveForId);
-    if (!target) return;
+    if (!target || !meeting) return;
     const targetCategory = categoryForRole(target.role, categories) ?? category;
     const finalZone = zoneFor(finalElapsed, targetCategory);
     await runMutation(() =>
       saveTiming(
+        meeting.code,
         target.id,
         finalElapsed,
         targetCategory.id,
@@ -245,7 +246,7 @@ export default function TimerPage() {
       );
       return;
     }
-    const { error } = await runMutation(() => addSpeaker(meeting.id, name, newRole));
+    const { error } = await runMutation(() => addSpeaker(meeting.code, name, newRole));
     if (error) {
       setFormError(`Could not add speaker: ${error.message}`);
       return;
@@ -255,14 +256,14 @@ export default function TimerPage() {
   }
 
   async function handleConfirm() {
-    if (!confirm) return;
+    if (!confirm || !meeting) return;
     const { kind, id } = confirm;
     setConfirm(null);
     if (kind === "time") {
-      await runMutation(() => clearTiming(id));
+      await runMutation(() => clearTiming(meeting.code, id));
     } else {
       if (selectedId === id) setSelectedId(null);
-      await runMutation(() => removeSpeaker(id));
+      await runMutation(() => removeSpeaker(meeting.code, id));
     }
   }
 

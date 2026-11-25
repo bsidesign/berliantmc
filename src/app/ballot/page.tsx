@@ -6,11 +6,11 @@ import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
 import Header from "@/components/Header";
 import MeetingBar from "@/components/MeetingBar";
-import { supabase } from "@/lib/supabase";
 import {
   BALLOT_CATEGORIES,
   fetchVotes,
   formatMeetingDate,
+  onMeetingChange,
   roleDef,
   setVotingOpen,
   votableCategory,
@@ -33,7 +33,7 @@ function fireConfetti() {
 
 export default function BallotPage() {
   const { meeting, speakers, ready, configured, runMutation } = useRequireMeeting("/ballot");
-  const meetingId = meeting?.id ?? null;
+  const meetingCode = meeting?.code ?? null;
 
   const [view, setView] = useState<View>("main");
   const [votes, setVotes] = useState<Vote[]>([]);
@@ -48,33 +48,21 @@ export default function BallotPage() {
   // Votes are tallied quietly in the background so winners can be revealed on
   // demand — only the per-category headcount is shown while voting is open.
   useEffect(() => {
-    if (!meetingId) return;
+    if (!meetingCode) return;
     let cancelled = false;
     const load = async () => {
-      const latest = await fetchVotes(meetingId);
+      const latest = await fetchVotes(meetingCode);
       if (!cancelled) setVotes(latest);
     };
     void load();
     const timer = setInterval(() => void load(), 4000);
-    const channel = supabase
-      .channel(`votes-${meetingId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "meeting_votes",
-          filter: `meeting_id=eq.${meetingId}`,
-        },
-        () => void load()
-      )
-      .subscribe();
+    const stopListening = onMeetingChange(meetingCode, () => void load());
     return () => {
       cancelled = true;
       clearInterval(timer);
-      void supabase.removeChannel(channel);
+      stopListening();
     };
-  }, [meetingId]);
+  }, [meetingCode]);
 
   // Every time a certificate opens (first reveal or reopening one already
   // revealed), celebrate with a short confetti burst.
@@ -146,18 +134,18 @@ export default function BallotPage() {
 
   async function startVoting() {
     if (!meeting) return;
-    await runMutation(() => setVotingOpen(meeting.id, true));
+    await runMutation(() => setVotingOpen(meeting.code, true));
     setView("main");
   }
 
   async function stopVoting() {
     if (!meeting) return;
-    await runMutation(() => setVotingOpen(meeting.id, false));
+    await runMutation(() => setVotingOpen(meeting.code, false));
   }
 
   async function revealWinners() {
     if (!meeting) return;
-    await runMutation(() => setVotingOpen(meeting.id, false));
+    await runMutation(() => setVotingOpen(meeting.code, false));
     setView("results");
   }
 

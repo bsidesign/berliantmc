@@ -12,10 +12,10 @@ export default function AhCounterPage() {
   function bump(speaker: Speaker, field: "filler" | "wod", delta: number) {
     const key = field === "filler" ? "filler_count" : "wod_count";
     const next = Math.max(0, speaker[key] + delta);
-    if (next === speaker[key]) return;
+    if (next === speaker[key] || !meeting) return;
     // Show the tap instantly; the server applies it atomically.
     patchSpeaker(speaker.id, { [key]: next });
-    void runMutation(() => bumpCount(speaker.id, field, delta));
+    void runMutation(() => bumpCount(meeting.code, speaker.id, field, delta));
   }
 
   if (!configured) {

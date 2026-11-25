@@ -3,8 +3,14 @@
 import { use, useEffect, useState } from "react";
 import { Vote as VoteIcon, CheckCircle2 } from "lucide-react";
 import Header from "@/components/Header";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { BALLOT_CATEGORIES, castVote, votableCategory, type BallotCategory } from "@/lib/meeting";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import {
+  BALLOT_CATEGORIES,
+  castVote,
+  fetchMyVotes,
+  votableCategory,
+  type BallotCategory,
+} from "@/lib/meeting";
 import { useMeetingData } from "@/lib/use-meeting";
 import { getVoterId } from "@/lib/voter";
 
@@ -25,6 +31,7 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
   const { code } = use(params);
   const { meeting, speakers, status } = useMeetingData(code.toUpperCase());
   const meetingId = meeting?.id ?? null;
+  const meetingCode = meeting?.code ?? null;
 
   // category -> speaker id this browser already voted for. null until the
   // lookup finishes, so a returning voter never sees live "Vote!" buttons for
@@ -36,29 +43,23 @@ export default function VotePage({ params }: { params: Promise<{ code: string }>
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!meetingId) return;
+    if (!meetingId || !meetingCode) return;
     let cancelled = false;
     async function loadMine() {
-      const { data } = await supabase
-        .from("meeting_votes")
-        .select("category, speaker_id")
-        .eq("meeting_id", meetingId)
-        .eq("voter_id", getVoterId());
+      const map = await fetchMyVotes(meetingCode!, getVoterId());
       if (cancelled) return;
-      const map: Record<string, string> = {};
-      for (const v of data ?? []) map[v.category] = v.speaker_id;
       setMine({ meetingId: meetingId!, votes: map });
     }
     void loadMine();
     return () => {
       cancelled = true;
     };
-  }, [meetingId]);
+  }, [meetingId, meetingCode]);
 
   async function vote(speakerId: string, category: BallotCategory) {
     if (!meeting) return;
     setError(null);
-    const { error: err } = await castVote(meeting.id, speakerId, category, getVoterId());
+    const { error: err } = await castVote(meeting.code, speakerId, category, getVoterId());
     if (err) {
       if (err.code === "23505") {
         setError(`You've already voted for ${category}.`);
